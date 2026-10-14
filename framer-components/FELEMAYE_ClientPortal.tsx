@@ -177,17 +177,18 @@ export default function ClientPortal(p: Props) {
     .fyp .g3{grid-template-columns:repeat(3,1fr)}
     .fyp .g4{grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch}
     .fyp .gh{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}
-    .fyp .homebar{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 18px;margin:0 0 8px;border:1px solid color-mix(in srgb,var(--ink) 9%,transparent);background:color-mix(in srgb,var(--surface) 60%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
-    .fyp .homebar .hb{font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.28em;text-transform:uppercase;background:none;border:0;color:var(--ink);cursor:pointer;min-height:44px;padding:0}
-    .fyp .subnav{display:flex;flex-wrap:wrap;gap:0;width:100%;margin:0 0 8px;border:1px solid color-mix(in srgb,var(--ink) 9%,transparent)}
-    .fyp .subnav .btn{flex:1 1 0;min-width:0;border:0;border-right:1px solid color-mix(in srgb,var(--ink) 9%,transparent);text-align:center;padding:12px 8px}
-    .fyp .subnav .btn:last-child{border-right:0}
-    .fyp .morenav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+    .fyp .navgrid{display:grid;gap:1px;background:color-mix(in srgb,var(--ink) 22%,transparent);border:1px solid color-mix(in srgb,var(--ink) 22%,transparent);margin:0 0 28px}
+    .fyp .navgrid .row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px}
+    .fyp .navgrid .row5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px}
+    .fyp .nv{background:var(--paper);color:var(--ink);border:0;border-radius:0;min-height:52px;padding:10px 8px;font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1.35}
+    .fyp .nv:hover{background:color-mix(in srgb,var(--accent) 14%,var(--paper))}
+    .fyp .nv[aria-selected=true],.fyp .nv[aria-current=page]{background:var(--accent);color:var(--paper)}
+    .fyp .nv:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
     .fyp .actrow{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:13px;align-items:baseline}
     .fyp .actrow .ts{grid-column:span 3;white-space:nowrap;font:11px ui-monospace,Menlo,monospace;letter-spacing:.04em;opacity:.6}
     .fyp .actrow .tx{grid-column:span 9;min-width:0;overflow-wrap:anywhere}
     .fyp .g2{grid-template-columns:1.4fr 1fr}
-    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .actrow .ts{grid-column:span 12}.fyp .actrow .tx{grid-column:span 12}.fyp .subnav .btn{flex:1 1 33%}}
+    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .actrow .ts{grid-column:span 12}.fyp .actrow .tx{grid-column:span 12}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
     .fyp img,.fyp iframe{max-width:100%}
     .fyp .tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;width:100%;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
     .fyp .tabs::-webkit-scrollbar{display:none}
@@ -371,8 +372,7 @@ function Dashboard({ p, client, project, db }: any) {
     const [tab, setTab] = React.useState("home")
     const first = (client?.name || p.nameOverride || "").split(" ")[0]
     // Primary sub-navigation (directive order). CHECKPOINTS = the Phases view. Everything else stays reachable in "More".
-    const tabs = [["home", "Home"], ["roadmap", "Roadmap"], ["ledger", "Ledger"], ["phases", "Checkpoints"], ["family", "Family Insights"], ["team", "Directory"]]
-    const more = [["boards", "Mood Boards"], ["files", "Files"], ["permit", "Permit Path"], ["ffe", "FF&E"], ["billing", "Billing"]]
+    const menu = [["roadmap", "Roadmap"], ["ledger", "Ledger"], ["phases", "Checkpoints"], ["family", "Family Insights"], ["team", "Directory"], ["boards", "Mood Boards"], ["files", "Files"], ["permit", "Permit Path"], ["ffe", "FF&E"], ["billing", "Billing"]]
     const pick = (k: string) => { setTab(k); try { window.scrollTo({ top: 0, behavior: "smooth" }) } catch {} }
     return (
         <div className="wrap">
@@ -383,20 +383,15 @@ function Dashboard({ p, client, project, db }: any) {
                 </div>
                 <button className="btn ghost" onClick={() => db.auth.signOut()}>Sign out</button>
             </div>
-            <div className="homebar">
-                <button className="hb" aria-current={tab === "home" ? "page" : undefined} onClick={() => pick("home")}>Home{project?.title ? ` · ${project.title}` : ""}</button>
-                <button className={"btn" + (tab === "meet" ? "" : " ghost")} onClick={() => pick("meet")}>Meet</button>
-            </div>
-            <div className="subnav" role="tablist" aria-label="Project sections">
-                {tabs.map(([k, l]) => (
-                    <button key={k} role="tab" aria-selected={tab === k} className={"btn" + (tab === k ? "" : " ghost")} onClick={() => pick(k)}>{l}</button>
-                ))}
-            </div>
-            <div className="morenav" role="tablist" aria-label="More sections">
-                {more.map(([k, l]) => (
-                    <button key={k} role="tab" aria-selected={tab === k} className={"btn" + (tab === k ? "" : " ghost")} style={{ padding: "8px 12px", fontSize: 11 }} onClick={() => pick(k)}>{l}</button>
-                ))}
-            </div>
+            <nav className="navgrid" aria-label="Project navigation">
+                <div className="row2">
+                    <button className="nv" aria-current={tab === "home" ? "page" : undefined} onClick={() => pick("home")}>Home</button>
+                    <button className="nv" aria-current={tab === "meet" ? "page" : undefined} onClick={() => pick("meet")}>Meet</button>
+                </div>
+                <div className="row5" role="tablist" aria-label="Project sections">
+                    {menu.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="nv" onClick={() => pick(k)}>{l}</button>)}
+                </div>
+            </nav>
             {tab === "home" && <Home p={p} project={project} db={db} go={pick} />}
             {tab === "phases" && <Phases project={project} db={db} />}
             {tab === "roadmap" && <Roadmap p={p} />}
