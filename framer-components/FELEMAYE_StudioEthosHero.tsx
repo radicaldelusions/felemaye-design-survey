@@ -30,10 +30,10 @@ export default function StudioEthosHero(props: Props) {
     const rise = (d: number) => ({ initial: calm ? false : { opacity: 0, y: 26 }, animate: { opacity: 1, y: 0 }, transition: { duration: 0.8, delay: d, ease: [0.22, 1, 0.36, 1] as any } })
     const css = `
 .seh *{box-sizing:border-box}
-.seh{container-type:inline-size}.seh .wrap{width:100%;max-width:1280px;margin:0 auto;padding:0 24px;overflow:hidden}
-@container (min-width:768px){.seh .wrap{padding:0 48px}}@container (min-width:1024px){.seh .wrap{padding:0 64px}}
+.seh .wrap{width:100%;max-width:80rem;margin:0 auto;padding:0 16px;overflow:hidden}@media(min-width:640px){.seh .wrap{padding:0 24px}}
+@media (min-width:768px){.seh .wrap{padding:0 48px}}@media (min-width:1024px){.seh .wrap{padding:0 64px}}
 .seh .row{display:flex;flex-direction:column;gap:48px;align-items:center}
-@container (min-width:1024px){.seh .row{flex-direction:row;gap:72px;align-items:center}.seh .col-t{flex:1 1 55%}.seh .col-p{flex:0 0 380px}}
+@media (min-width:1024px){.seh .row{flex-direction:row;gap:48px;align-items:center;justify-content:space-between}.seh .col-t{flex:0 0 60%;max-width:60%}.seh .col-p{flex:0 0 40%;max-width:40%}}
 .seh .col-t,.seh .col-p{min-width:0;width:100%}
 .seh .tick{display:flex;width:max-content;animation:sehslide 38s linear infinite;will-change:transform}
 .seh .tick:hover{animation-play-state:paused}
@@ -60,11 +60,11 @@ export default function StudioEthosHero(props: Props) {
                             ))}
                         </h1>
                         <motion.div {...rise(0.3)} style={{ marginTop: 22, font: `600 clamp(15px,1.6vw,19px) ${SANS}`, letterSpacing: ".08em", color: "#93B4F5" }}>Felema Yemaneberhan <span style={{ color: BLUE, margin: "0 8px" }}>|</span> <span lang="ti" style={{ fontFamily: "'Noto Sans Ethiopic','Abyssinica SIL',Inter,sans-serif" }}>ፈለማ የማነበርሃን</span></motion.div>
-                        <motion.p {...rise(0.35)} style={{ font: `300 clamp(15px,1.5vw,18px)/1.75 ${SANS}`, color: "#CBD5E1", margin: "28px 0 0", maxWidth: 560 }}>{p.body}</motion.p>
+                        <motion.p {...rise(0.35)} style={{ font: `300 clamp(15px,1.5vw,18px)/1.75 ${SANS}`, color: "#CBD5E1", margin: "28px 0 0", maxWidth: "62ch" }}>{p.body}</motion.p>
                         <motion.div {...rise(0.5)} style={{ marginTop: 28, paddingLeft: 16, borderLeft: `2px solid ${BLUE}`, font: `500 12px/1.9 ui-monospace,Menlo,monospace`, letterSpacing: ".16em", textTransform: "uppercase", color: MUTED, whiteSpace: "pre-line" }}>{p.credentials}</motion.div>
                     </div>
                     <motion.div {...rise(0.25)} className="col-p" style={{ display: "flex", justifyContent: "center" }}>
-                        <motion.figure className="pol rotate-2 hover:rotate-0 transition-transform" animate={calm ? undefined : { y: [0, -10, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }} style={{ margin: 0, width: "100%", maxWidth: 340, background: "#FBFAF6", padding: "16px 16px 0", boxShadow: "0 2px 3px rgba(0,0,0,.25),0 14px 28px rgba(2,6,23,.45),0 34px 60px rgba(2,6,23,.4)", position: "relative" }}>
+                        <motion.figure className="pol rotate-2 hover:rotate-0 transition-transform" animate={calm ? undefined : { y: [0, -10, 0] }} transition={{ duration: 7, repeat: Infinity, ease: "easeInOut" }} style={{ margin: 0, width: "min(100%, 440px)", background: "#FBFAF6", padding: "16px 16px 0", boxShadow: "0 2px 3px rgba(0,0,0,.25),0 14px 28px rgba(2,6,23,.45),0 34px 60px rgba(2,6,23,.4)", position: "relative" }}>
                             <div aria-hidden style={{ position: "absolute", top: -14, left: "50%", width: 96, height: 26, transform: "translateX(-50%) rotate(-3deg)", background: "rgba(214,205,178,.55)", boxShadow: "0 1px 2px rgba(0,0,0,.2)" }} />
                             <div style={{ aspectRatio: "1 / 1", background: p.photo?.src ? `#000 url(${p.photo.src}) center/cover` : `repeating-linear-gradient(135deg,${SLATE},${SLATE} 10px,#243247 10px,#243247 20px)`, boxShadow: "inset 0 0 0 1px rgba(0,0,0,.25), inset 0 6px 14px rgba(0,0,0,.25)", display: "grid", placeItems: "center", color: "#7C8CA5", font: `11px ui-monospace,monospace`, letterSpacing: ".2em" }}>{!p.photo?.src && "ADD PHOTO"}</div>
                             <figcaption style={{ padding: "16px 6px 20px", textAlign: "center", color: "#1b2a4a" }}>

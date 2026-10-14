@@ -31,3 +31,7 @@ Until then every vertical's "Book" link falls back to `/discoverycall`, which wo
 - /perspectives: use the new component and put nothing else beside it; its container supplies the margins.
 - /inquiry: dropdown "How did you hear about us?" (Client Referral, Architectural Press / Media, Industry Partner / Trade, Academic / Cornell Network, Other); hidden fields `vertical`, `item`, `intent` read from the query string.
 - Redeploy the v6 survey HTML to Netlify if you have not (iframe auto-height).
+
+## Hotfix (19:40): narrow desktop rendering
+Cause: the last pass put CSS container queries (`container-type: inline-size`) on each component's root. In Framer that makes the root ignore its content width, so any instance not set to Fill collapsed to a narrow column. Removed from StudioEthosHero, SiteFooter, FamilySurvey, SurfaceLibrary and Perspectives. They now use plain viewport media queries, a `w-full overflow-hidden` root and a `max-w-7xl` container with `px-4 sm:px-6 md:px-12 lg:px-16`. In Framer, still set each instance's Width to Fill (100%).
+Trade-off: the canvas's phone frame now previews the desktop layout for these components; use Preview to check mobile.

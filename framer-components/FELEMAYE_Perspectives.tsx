@@ -47,13 +47,13 @@ export default function Perspectives(props: Props) {
     const [playing, setPlaying] = React.useState<string | null>(null)
     const rows: E[] = p.entries.split(/\r?\n/).map((l) => l.split("|").map((x) => x.trim())).filter((r) => r[2]).map(([date, type, title, note, url]) => ({ date, type: (type || "press").toLowerCase(), title, note: note || "", url: url || "" }))
     const shown = rows.filter((r) => f === "all" || r.type === f)
-    const css = `.px *{box-sizing:border-box}.px{container-type:inline-size}.px .wrap{width:100%;max-width:1280px;margin:0 auto;padding:0 24px}@container (min-width:768px){.px .wrap{padding:0 48px}}@container (min-width:1024px){.px .wrap{padding:0 64px}}
+    const css = `.px *{box-sizing:border-box}.px .wrap{width:100%;max-width:80rem;margin:0 auto;padding:0 16px}@media(min-width:640px){.px .wrap{padding:0 24px}}@media (min-width:768px){.px .wrap{padding:0 48px}}@media (min-width:1024px){.px .wrap{padding:0 64px}}
 .px .pill{font:500 11px ${MONO};letter-spacing:.16em;text-transform:uppercase;color:${TEXT};background:transparent;border:1px solid #3a3a3c;border-radius:999px;padding:0 16px;min-height:44px;cursor:pointer}.px .pill[aria-pressed=true]{background:${GOLD};color:${BG};border-color:${GOLD}}.px .pill:focus-visible,.px a:focus-visible,.px button:focus-visible{outline:2px solid ${GOLD};outline-offset:2px}
-.px .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}@container (min-width:640px){.px .grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@container (min-width:1024px){.px .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}}
+.px .grid{display:grid;grid-template-columns:minmax(0,1fr);gap:20px}@media (min-width:640px){.px .grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (min-width:1024px){.px .grid{grid-template-columns:repeat(3,minmax(0,1fr));gap:28px}}
 .px .card{background:${CARD};border:1px solid ${LINE};display:flex;flex-direction:column;min-width:0;transition:border-color .25s}.px .card:hover{border-color:${GOLD}}
 .px .vid{position:relative;aspect-ratio:16/9;background:#050505;display:block;width:100%;border:0;padding:0;cursor:pointer;overflow:hidden}.px .vid iframe{position:absolute;inset:0;width:100%;height:100%;border:0}`
     return (
-        <section className="px" style={{ ...p.style, width: "100%", background: BG, color: TEXT, padding: "clamp(40px,7vw,96px) 0" }}>
+        <section className="px" style={{ ...p.style, width: "100%", overflow: "hidden", boxSizing: "border-box", background: BG, color: TEXT, padding: "clamp(40px,7vw,96px) 0" }}>
             <style>{css}</style>
             <div className="wrap max-w-7xl mx-auto px-6 md:px-12 lg:px-16">
                 <h1 style={{ font: `400 clamp(38px,6vw,76px)/1.04 ${SERIF}`, margin: "0 0 12px" }}>{p.heading}</h1>
