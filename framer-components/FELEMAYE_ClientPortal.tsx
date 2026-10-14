@@ -176,6 +176,7 @@ export default function ClientPortal(p: Props) {
     .fyp .grid{display:grid;gap:clamp(14px,2vw,24px)}
     .fyp .g3{grid-template-columns:repeat(3,1fr)}
     .fyp .g4{grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch}
+    .fyp .snd{grid-column:span 2}
     .fyp .gh{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}
     .fyp .navgrid{display:grid;gap:1px;background:color-mix(in srgb,var(--ink) 22%,transparent);border:1px solid color-mix(in srgb,var(--ink) 22%,transparent);margin:0 0 28px}
     .fyp .navgrid .row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px}
@@ -188,7 +189,7 @@ export default function ClientPortal(p: Props) {
     .fyp .actrow .ts{grid-column:span 3;white-space:nowrap;font:11px ui-monospace,Menlo,monospace;letter-spacing:.04em;opacity:.6}
     .fyp .actrow .tx{grid-column:span 9;min-width:0;overflow-wrap:anywhere}
     .fyp .g2{grid-template-columns:1.4fr 1fr}
-    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .actrow .ts{grid-column:span 12}.fyp .actrow .tx{grid-column:span 12}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
+    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow .ts{grid-column:span 12}.fyp .actrow .tx{grid-column:span 12}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
     .fyp img,.fyp iframe{max-width:100%}
     .fyp .tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;width:100%;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
     .fyp .tabs::-webkit-scrollbar{display:none}
@@ -447,21 +448,17 @@ function Home({ p, project, db, go }: any) {
                         <div className="mono">Current phase</div>
                         <h2 style={{ fontSize: 30, marginTop: 10 }}>{current ? `Phase ${current.seq}` : "—"}</h2>
                         <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6, lineHeight: 1.5 }}>{current?.title}</div>
+                        <div style={{ marginTop: 14, paddingTop: 12, borderTop: LINE, display: "flex", alignItems: "baseline", gap: 10 }}><span style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 30, color: "var(--accent)", lineHeight: 1 }}>{approved} / {ph.rows.filter((r: any) => r.seq <= 4).length || 4}</span><span className="mono">phases approved</span></div>
                     </div>
                     <div className="card" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={() => go("phases")} onKeyDown={(e) => e.key === "Enter" && go("phases")}>
                         <div className="mono">Awaiting you</div>
                         <h2 style={{ fontSize: 30, marginTop: 10 }}>{pending}</h2>
                         <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>{pending ? "Open Phases to review" : "Nothing needs you right now"}</div>
                     </div>
-                    <div className="card" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={() => go("roadmap")} onKeyDown={(e) => e.key === "Enter" && go("roadmap")}>
-                        <div className="mono">Phases approved</div>
-                        <h2 style={{ fontSize: 30, marginTop: 10 }}>{approved} / {ph.rows.filter((r: any) => r.seq <= 4).length || 4}</h2>
-                        <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>See the timeline</div>
-                    </div>
-                <div className="card">
+                <div className="card snd">
                     <div className="mono">Soundtrack</div>
                     {project?.playlist_id ? (
-                        <iframe title="Project playlist" style={{ border: 0, width: "100%", height: 152, marginTop: 12 }} loading="lazy"
+                        <iframe title="Project playlist" style={{ border: 0, width: "100%", height: 232, marginTop: 12 }} loading="lazy"
                             allow="autoplay; clipboard-write; encrypted-media" src={`https://open.spotify.com/embed/playlist/${project.playlist_id}?utm_source=generator&theme=0`} />
                     ) : <p style={{ opacity: 0.6, fontSize: 13 }}>{project?.music_note || "A playlist curated for your project will appear here."}</p>}
                 </div>
