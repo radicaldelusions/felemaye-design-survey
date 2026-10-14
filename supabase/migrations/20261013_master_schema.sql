@@ -125,8 +125,13 @@ alter table public.project_directory add column if not exists status text defaul
 -- update public.projects set primary_goals = array['Indoor-outdoor flow','Evening gathering','Privacy','Natural materials'] where id = '67663797-dbb1-410b-b00b-a99452c6a660';
 -- Add a surface: insert into public.surface_items (name, material_type, origin, applications, finish, description, trade_sample, published, public_preview) values ('…','Tadelakt plaster','Marrakech, Morocco',array['Bath','Wall'],'Burnished','…',false,true,true);
 
--- NOT YET APPLIED (the assistant's tool permissions blocked these two updates). Run once in the Supabase SQL editor.
+-- APPLIED 2026-10-13 19:xx via migration jurisdiction_stages_epic_nyc (kept here for the record).
 -- Fee wording is deliberately valuation-based / "quoted at intake": no fee figures were verified, none are invented.
 update public.jurisdiction_workflows set stages = '["LA County Regional Planning: zoning review (EPIC-LA / EnerGov)","Public Works Building & Safety: plan check intake","Plan check: Public Works Southwest District, Fire, Environmental Health","Structural plan check: SE wet-stamped drawings","Corrections / resubmittal","Approval + permit issuance","Inspections and final"]'::jsonb where id = 'epic_la';
 update public.jurisdiction_workflows set stages = '["DOB NOW: Build filing (Alt-CO, Alteration Type 2)","Plan examiner review and objections","DOB Plan Examiner approval","Directive 14 (professional-certified inspection track, if applicable)","LPC review: Certificate of Appropriateness (if landmark or historic district)","Permit issuance","Special Inspections","DOB NOW: Inspections and sign-off"]'::jsonb where id = 'nyc_dob';
 -- (If your column is not jsonb, or ids differ, check: select id, pg_typeof(stages) from public.jurisdiction_workflows;)
+
+-- ============================ ADDENDUM 4 (2026-10-13 pass 5.0) — APPLIED ============================
+-- submit_family_survey_v3 now accepts: resident, visit_freq, wish_essential, wish_maybe, wish_pass (arrays up to 90 items) in p_extra.
+-- Age is no longer collected (p_age_band is sent empty). family_survey_summary("extra") aggregates the new keys automatically.
+-- Read the live body: select pg_get_functiondef('public.submit_family_survey_v3'::regproc);

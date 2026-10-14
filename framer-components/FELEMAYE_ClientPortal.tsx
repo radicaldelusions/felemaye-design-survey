@@ -1066,12 +1066,12 @@ function PermitPath({ project, db }: any) {
                 <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, maxWidth: 640, margin: "0 0 14px" }}>
                     Where your project sits in the agency review process. The studio tracks each step here so you never have to chase the county or city for status. Fees are shown as the agency posts them.
                 </p>
-                <div className="row" role="tablist" aria-label="Jurisdiction" style={{ gap: 8, flexWrap: "wrap" }}>
+                {studio && <div className="row" role="tablist" aria-label="Jurisdiction (studio preview)" style={{ gap: 8, flexWrap: "wrap" }}>
                     {(d?.options || []).map((o: any) => (
                         <button key={o.id} role="tab" aria-selected={shown === o.id} className={"btn" + (shown === o.id ? "" : " ghost")} onClick={() => pick(o.id)}>{o.label}{o.id === d?.current ? " · this project" : ""}</button>
                     ))}
-                </div>
-                {shown !== d?.current && d && (
+                </div>}
+                {studio && shown !== d?.current && d && (
                     <p className="mono" style={{ marginTop: 12, opacity: 1 }}>
                         Preview only. The studio sets your project's official path.{" "}
                         {studio && <a style={{ cursor: "pointer", textDecoration: "underline" }} onClick={save}>Make this the project's path</a>}
@@ -1103,7 +1103,7 @@ function PermitPath({ project, db }: any) {
                 <p style={{ opacity: 0.55, fontSize: 12, lineHeight: 1.7, margin: "12px 0 0" }}>Agency fees are passed through at cost and logged in your Ledger. Any single item over $250 needs your written approval first.</p>
                 {j.portal_url && <a className="btn" href={j.portal_url} target="_blank" rel="noopener" style={{ textDecoration: "none", display: "inline-block", marginTop: 14 }}>Open the agency portal ↗</a>}
             </div>
-            <BiCoastal current={d?.current} />
+            <BiCoastal current={d?.current} studio={studio} />
         </div>
     )
 }
@@ -1124,14 +1124,16 @@ const TRACKS = [
         ["Special Inspections and sign-off", "Required special inspections, then final inspection sign-off in DOB NOW."] ],
       fees: ["DOB filing fee (based on job type and cost)", "Plan examination and permit fee (based on estimated cost)", "Special inspection agency fees (quoted by the agency)", "LPC application fee where applicable"] },
 ]
-function BiCoastal({ current }: any) {
+function BiCoastal({ current, studio }: any) {
+    const tracks = studio ? TRACKS : TRACKS.filter((t) => t.id === current)
+    if (!tracks.length) return null
     return (
         <div className="card">
-            <div className="mono">Bi-coastal permitting</div>
-            <h2 style={{ fontSize: 24, margin: "8px 0 6px" }}>How a filing moves on each coast</h2>
+            <div className="mono">{studio ? "Bi-coastal permitting · studio view shows both tracks" : "Permitting milestones"}</div>
+            <h2 style={{ fontSize: 24, margin: "8px 0 6px" }}>{studio ? "How a filing moves on each coast" : "How your filing moves"}</h2>
             <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, maxWidth: 640, margin: "0 0 6px" }}>Milestones and fee types for both agencies. Fees are set by each agency's current schedule and mostly scale with project valuation, so exact figures and the expected review window are quoted per project at intake, never guessed.</p>
             <div className="fy-bc" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(min(100%,300px),1fr))", gap: 20, marginTop: 14 }}>
-                {TRACKS.map((t) => (
+                {tracks.map((t) => (
                     <div key={t.id} style={{ borderTop: LINE, paddingTop: 14, minWidth: 0 }}>
                         <div className="row" style={{ justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                             <b style={{ fontSize: 17 }}>{t.label}</b>
@@ -1318,14 +1320,39 @@ function FamilyInsights({ p, project, db }: any) {
                 </div>
                 <p className="mono" style={{ marginTop: 14 }}>{s?.total ?? 0} responses so far</p>
             </div>
-            {s && s.total > 0 && <div className="grid g2" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>{bars("Moodboard picks", s.mood)}{bars("Lighting mood", s.lighting)}{bars("Colour palette", s.palette)}{bars("Courtyard seating", s.seating)}{bars("How a room should feel", s.room_feel)}{bars("When it will be used", s.extra?.time_of_day)}{bars("Light controls", s.extra?.light_control)}{bars("What will happen out there", s.extra?.activities)}{bars("Group size", s.extra?.group_size)}{bars("Privacy (1 open, 5 tucked away)", s.extra?.privacy)}{bars("Indoor-outdoor flow (1 separate, 5 continuous)", s.extra?.flow)}{bars("Materials to touch", s.extra?.materials)}{bars("Underfoot", s.extra?.underfoot)}{bars("Sitting time", s.extra?.sit_duration)}{bars("Sun or shade", s.extra?.shade)}{bars("Seasons", s.extra?.seasons)}{bars("Staying comfortable", s.extra?.comfort)}</div>}
+            {s && s.total > 0 && <div className="grid g2" style={{ gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>{bars("Moodboard picks", s.mood)}{bars("Lighting mood", s.lighting)}{bars("Colour palette", s.palette)}{bars("Courtyard seating", s.seating)}{bars("How a room should feel", s.room_feel)}{bars("When it will be used", s.extra?.time_of_day)}{bars("Light controls", s.extra?.light_control)}{bars("What will happen out there", s.extra?.activities)}{bars("Lives here full-time?", s.extra?.resident)}{bars("Visit frequency", s.extra?.visit_freq)}{bars("Group size", s.extra?.group_size)}{bars("Privacy (1 open, 5 tucked away)", s.extra?.privacy)}{bars("Indoor-outdoor flow (1 separate, 5 continuous)", s.extra?.flow)}{bars("Materials to touch", s.extra?.materials)}{bars("Underfoot", s.extra?.underfoot)}{bars("Sitting time", s.extra?.sit_duration)}{bars("Sun or shade", s.extra?.shade)}{bars("Seasons", s.extra?.seasons)}{bars("Staying comfortable", s.extra?.comfort)}</div>}
             <Adjacencies adj={adj} />
+            <WishMatrix s={s} adj={adj} />
             {s && s.wishes?.length > 0 && (
                 <div className="card">
                     <div className="mono">Wishes</div>
                     {s.wishes.map((w: any, i: number) => <p key={i} style={{ fontSize: 15, lineHeight: 1.6, margin: "12px 0 0", paddingTop: 12, borderTop: LINE }}>“{w.wish}”<span className="mono" style={{ display: "block", marginTop: 4 }}>{[w.who, w.age].filter(Boolean).join(" · ") || "A family member"}</span></p>)}
                 </div>
             )}
+        </div>
+    )
+}
+
+function WishMatrix({ s, adj }: any) {
+    const E = s?.extra?.wish_essential || {}, M = s?.extra?.wish_maybe || {}, P = s?.extra?.wish_pass || {}
+    const goals: string[] = adj?.goals || []
+    const words = (x: string) => String(x).toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3)
+    const hit = (t: string) => goals.some((g) => words(g).some((w) => words(t).includes(w)))
+    const items = Array.from(new Set([...Object.keys(E), ...Object.keys(M), ...Object.keys(P)])).sort((a, b) => (E[b] || 0) - (E[a] || 0) || (M[b] || 0) - (M[a] || 0))
+    if (!items.length) return null
+    return (
+        <div className="card">
+            <div className="mono">Wishlist matrix · Essential / Maybe / Pass</div>
+            <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, maxWidth: 640, margin: "8px 0 10px" }}>How the household voted on each idea. Items that touch a primary project goal are marked.</p>
+            <div className="fy-wm" style={{ display: "grid", gridTemplateColumns: "repeat(12,minmax(0,1fr))", gap: 16, padding: "10px 0", borderTop: LINE }}>
+                <div className="mono" style={{ gridColumn: "span 6" }}>Idea</div><div className="mono" style={{ gridColumn: "span 2" }}>Essential</div><div className="mono" style={{ gridColumn: "span 2" }}>Maybe</div><div className="mono" style={{ gridColumn: "span 2" }}>Pass</div>
+            </div>
+            {items.map((it) => (
+                <div key={it} className="fy-wm" style={{ display: "grid", gridTemplateColumns: "repeat(12,minmax(0,1fr))", gap: 16, padding: "10px 0", borderTop: LINE, fontSize: 14, alignItems: "center" }}>
+                    <div style={{ gridColumn: "span 6", overflowWrap: "anywhere" }}>{it}{hit(it) && <span className="pill" style={{ marginLeft: 8, borderColor: "var(--sage)", color: "var(--sage)" }}>Goal overlap</span>}</div>
+                    <b style={{ gridColumn: "span 2", color: "var(--accent)" }}>{E[it] || 0}</b><span style={{ gridColumn: "span 2" }}>{M[it] || 0}</span><span style={{ gridColumn: "span 2", opacity: 0.6 }}>{P[it] || 0}</span>
+                </div>
+            ))}
         </div>
     )
 }

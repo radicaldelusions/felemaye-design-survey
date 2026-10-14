@@ -14,7 +14,7 @@ const NODES: N[] = [
     { id: "sd", slug: "spatial-design", code: "SD", label: "Spatial Design & Interiors", short: "SPATIAL", color: "#D4A373", ink: "#1a1208", blurb: "Interiors, courtyards and environments, from first sketch to installed." },
     { id: "ss", slug: "surface-library", code: "SL", label: "Surface Design / Surface Library", short: "SURFACE", color: "#FAEDCD", ink: "#1f1708", blurb: "Wallcoverings, carpets and textiles, developed and licensed." },
     { id: "bv", slug: "bim-vdc", code: "BV", label: "BIM / VDC", short: "BIM·VDC", color: "#B7C0A8", ink: "#12170a", blurb: "Revit ecosystems and cross-firm coordination that keep every drawing honest." },
-    { id: "pf", slug: "procurement", code: "PF", label: "FF&E and OS&E Procurement", short: "FF&E", color: "#C9B79C", ink: "#1a1308", blurb: "Sourcing, budgets and lead times, managed end to end." },
+    { id: "pf", slug: "ffe-procurement", code: "PF", label: "FF&E and OS&E Procurement", short: "FF&E", color: "#C9B79C", ink: "#1a1308", blurb: "Sourcing, budgets and lead times, managed end to end." },
     { id: "cs", slug: "creative-strategy", code: "CS", label: "Creative Strategy", short: "STRATEGY", color: "#E9EDC9", ink: "#161a08", blurb: "Positioning, narrative and the brief behind the brief." },
     { id: "ta", slug: "talent-alignment", code: "TA", label: "Talent Alignment", short: "TALENT", color: "#CCD5AE", ink: "#121a08", blurb: "Team alignment, cultural stewardship and collaborative networks." },
     { id: "ci", slug: "critical-inquiry", code: "CI", label: "Critical Inquiry", short: "INQUIRY", color: "#E5D3B3", ink: "#1a1408", blurb: "Research, criticism and the questions behind a commission." },
@@ -22,6 +22,18 @@ const NODES: N[] = [
     { id: "rd", slug: "radical-delusions-lab", code: "RD", label: "Radical Delusions Lab ©", short: "RDL ©", color: "#D9B8A0", ink: "#1f1008", blurb: "The speculative sandbox: unconstrained concepts and poetic research." },
 ]
 const EDGES: [string, string, string][] = [["sd", "ss", "specifies"], ["sd", "bv", "models it"], ["bv", "pf", "schedules"], ["sd", "pf", "FF&E packages"], ["cs", "sd", "briefs"], ["cs", "ss", "positions"], ["ci", "cs", "frames"], ["ci", "ma", "publishes"], ["rd", "ci", "provokes"], ["rd", "ss", "prototypes"], ["ta", "cs", "aligns"], ["ta", "bv", "coordinates"], ["ma", "sd", "documents"]]
+// Hyper-specific scope lines used in the negative space between the nodes (and in the detail card on narrow screens).
+const SCOPE: Record<string, string[]> = {
+    sd: ["Concept through installation", "Space planning, finishes and details", "Permit-ready drawings, CA §5537 / §5538 scope"],
+    ss: ["Wallcoverings, bespoke carpets, textiles", "Pattern, repeat and colourway development", "Licensing and trade sampling"],
+    bv: ["Revit models and family standards", "Title blocks, sheets, shared parameters", "Cross-firm coordination and review"],
+    pf: ["FF&E and OS&E specification packages", "Budget, quote and lead-time tracking", "Order, delivery and punch list"],
+    cs: ["Positioning and narrative", "The brief behind the brief", "Brand-to-space alignment"],
+    ta: ["Team alignment", "Cultural stewardship", "Collaborative networks"],
+    ci: ["Research and criticism", "The questions behind a commission", "Panels, essays and curation"],
+    ma: ["Essays and criticism", "Sonic records", "The practice thinking in public"],
+    rd: ["Speculative concepts", "Poetic research", "Prototypes for the surface studio"],
+}
 const GOLD = "#D4A373", MONO = "ui-monospace,'SF Mono',Menlo,monospace"
 
 export default function CapabilitiesMatrix(props: Props) {
@@ -93,6 +105,19 @@ export default function CapabilitiesMatrix(props: Props) {
                     const lx = 0.25 * P.x + 0.5 * mx + 0.25 * Q.x, ly = 0.25 * P.y + 0.5 * my + 0.25 * Q.y
                     return <g key={i} opacity={act ? (on ? 1 : 0.08) : 0.45} style={{ transition: "opacity .25s" }}><path d={`M${P.x},${P.y} Q${mx},${my} ${Q.x},${Q.y}`} fill="none" stroke={on ? GOLD : "#8a8272"} strokeWidth={on ? 2 : 1} />{on && <g><rect x={lx - lab.length * 3.6 - 6} y={ly - 10} width={lab.length * 7.2 + 12} height="20" fill="#0B0B0C" /><text x={lx} y={ly + 4} textAnchor="middle" fontFamily={MONO} fontSize="11" letterSpacing=".6" fill={GOLD}>{lab}</text></g>}</g>
                 })}
+                {!narrow && (() => {
+                    const x0 = cx - 196, y0 = cy - 74, W = 392, H = 148, k = 12
+                    const rows = node ? SCOPE[node.id] : ["SD  Concept → installation", "BV  Revit & sheet standards", "PF  FF&E / OS&E packages", "SL  Pattern & licensing", "CS  Positioning & brief", "CI  Research & criticism"]
+                    return (
+                        <g style={{ pointerEvents: "none" }}>
+                            <rect x={x0} y={y0} width={W} height={H} fill="#0B0B0C" />
+                            <path d={`M${x0},${y0 + k}V${y0}H${x0 + k} M${x0 + W - k},${y0}H${x0 + W}V${y0 + k} M${x0 + W},${y0 + H - k}V${y0 + H}H${x0 + W - k} M${x0 + k},${y0 + H}H${x0}V${y0 + H - k}`} fill="none" stroke={node ? node.color : "#4a4640"} strokeWidth="1" />
+                            <text x={x0 + 18} y={y0 + 26} fontFamily={MONO} fontSize="9" letterSpacing="2.4" fill={node ? node.color : "#7d766a"}>{node ? node.label.toUpperCase() : "SCOPE INDEX"}</text>
+                            {node ? rows.map((r, i) => <text key={r} x={x0 + 18} y={y0 + 56 + i * 26} fontFamily="Inter,system-ui,sans-serif" fontSize="12.5" fill="#D8D0C0">{r}</text>)
+                                : rows.map((r, i) => <text key={r} x={x0 + 18 + (i % 2) * 188} y={y0 + 56 + Math.floor(i / 2) * 26} fontFamily={MONO} fontSize="9.5" letterSpacing=".6" fill="#8f887a">{r}</text>)}
+                        </g>
+                    )
+                })()}
                 {NODES.map((n) => {
                     const P = pos[n.id], on = !act || related.has(n.id)
                     return (
@@ -119,6 +144,7 @@ export default function CapabilitiesMatrix(props: Props) {
                 {node && <>
                     <div style={{ font: `10px ${MONO}`, letterSpacing: ".22em", textTransform: "uppercase", color: node.color }}>{node.label}</div>
                     <p style={{ margin: "6px 0 10px", fontSize: 14, lineHeight: 1.55 }}>{node.blurb}</p>
+                    {narrow && <ul style={{ margin: "0 0 10px", padding: "0 0 0 16px", fontSize: 12.5, lineHeight: 1.6, color: "#C9C1B1" }}>{SCOPE[node.id].map((r) => <li key={r}>{r}</li>)}</ul>}
                     <div style={{ font: `10px ${MONO}`, color: "#A39B8B", lineHeight: 1.7 }}>{EDGES.filter(([a, b]) => a === node.id || b === node.id).map(([a, b, l]) => `${NODES.find((x) => x.id === (a === node.id ? b : a))!.code} ${l}`).join(" · ")}</div>
                     <a href={href(node)} style={{ display: "inline-block", marginTop: 10, padding: "12px 0", color: GOLD, font: `10px ${MONO}`, letterSpacing: ".2em", textTransform: "uppercase", textDecoration: "underline", textUnderlineOffset: 4 }}>Start an inquiry ↗</a>
                 </>}

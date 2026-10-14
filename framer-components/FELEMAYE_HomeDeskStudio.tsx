@@ -248,11 +248,14 @@ function BlackBook() {
             <path d="M0,0 H146 Q160,0 160,14 V211 Q160,225 146,225 H0 Z" filter="url(#dc-leather)" opacity=".6" />
             <path d="M6,2 H146" stroke="#fff" strokeWidth="1.2" opacity=".18" />
             <rect x="118" y="-1" width="9" height="227" fill="#050505" /><rect x="119.5" y="-1" width="2" height="227" fill="#fff" opacity=".12" />
-            <clipPath id="dc-persp-clip"><rect x="14" y="78" width="104" height="58" /></clipPath>
+            <clipPath id="dc-persp-clip"><rect x="20" y="84" width="92" height="46" /></clipPath>
             <rect x="14" y="78" width="104" height="58" fill="#f1ead8" stroke="#cfc6ad" strokeWidth=".6" />
+            {/* embossed inner rule: all lettering stays inside it */}
+            <rect x="18.5" y="82.5" width="95" height="49" fill="none" stroke="#b9ae93" strokeWidth=".6" />
+            <rect x="19.5" y="83.5" width="93" height="47" fill="none" stroke="#fff" strokeOpacity=".7" strokeWidth=".5" />
             <g clipPath="url(#dc-persp-clip)">
-                <text x="66" y="104" textAnchor="middle" fontFamily={HAND} fontSize="22" fill="#2b2b28" textLength="82" lengthAdjust="spacingAndGlyphs">Perspectives</text>
-                <text x="66" y="124" textAnchor="middle" fontFamily={MONO} fontSize="7" fill="#6d6657" letterSpacing="1.2" textLength="84" lengthAdjust="spacingAndGlyphs">ESSAYS · RECORDS</text>
+                <text x="66" y="107" textAnchor="middle" fontFamily={HAND} fontSize="19" fill="#2b2b28" textLength="72" lengthAdjust="spacingAndGlyphs">Perspectives</text>
+                <text x="66" y="123" textAnchor="middle" fontFamily={MONO} fontSize="6" fill="#6d6657" letterSpacing="1" textLength="70" lengthAdjust="spacingAndGlyphs">ESSAYS · RECORDS</text>
             </g>
             <path d="M52,224 q-2,18 3,32 l4,-2 q-4,-14 -3,-30 Z" fill="#111" />
         </g>
