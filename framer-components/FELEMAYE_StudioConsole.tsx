@@ -209,7 +209,13 @@ function Clients({ db, portalUrl, supabaseUrl }: any) {
                         </div>
                     ))}
                     <Extras db={db} sel={sel} supabaseUrl={supabaseUrl} />
-                    <div className="mono" style={{ marginTop: 12 }}>Files {detail.fl.length} · Recent: {detail.act.map((a: any) => a.action).join(", ") || "none"}</div>
+                    <div className="mono" style={{ marginTop: 12 }}>Files {detail.fl.length} · Recent activity</div>
+                    {detail.act.map((a: any) => { const d = new Date(a.created_at); const stamp = `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`; return (
+                        <div key={a.id} style={{ display: "grid", gridTemplateColumns: "repeat(12,minmax(0,1fr))", gap: 16, padding: "8px 0", borderTop: ".5px solid color-mix(in srgb,var(--ink) 20%,transparent)", fontSize: 13, alignItems: "baseline" }}>
+                            <span className="mono" style={{ gridColumn: "span 3", whiteSpace: "nowrap", opacity: 0.6 }}>{stamp}</span>
+                            <span style={{ gridColumn: "span 9", minWidth: 0, overflowWrap: "anywhere" }}>{a.actor ? `${a.actor} · ` : ""}{String(a.action).replace(/_/g, " ")}</span>
+                        </div>) })}
+                    {!detail.act.length && <div className="mono">none</div>}
                 </div>
             )}
         </div>

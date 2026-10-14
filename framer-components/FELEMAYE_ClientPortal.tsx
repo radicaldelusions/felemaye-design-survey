@@ -168,15 +168,26 @@ export default function ClientPortal(p: Props) {
     .fyp h1,.fyp h2,.fyp h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;margin:0;letter-spacing:.01em}
     .fyp button{font:inherit;cursor:pointer}
     .fyp .wrap{max-width:1280px;margin:0 auto;padding:clamp(20px,5vw,72px)}
-    .fyp .card{background:var(--surface);border:1px solid var(--line);padding:clamp(18px,3vw,32px)}
+    .fyp .card{background:color-mix(in srgb,var(--surface) 60%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid color-mix(in srgb,var(--ink) 9%,transparent);padding:clamp(18px,3vw,32px);min-width:0}
     .fyp .btn{background:var(--accent);color:#0B0B0C;border:0;padding:14px 22px;letter-spacing:.18em;font-size:11px;text-transform:uppercase}
     .fyp .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}.fyp .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
     .fyp .btn:disabled{opacity:.4;cursor:default}
     .fyp input,.fyp textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);padding:12px 2px;font:inherit;color:inherit;outline:none;font-size:16px}
     .fyp .grid{display:grid;gap:clamp(14px,2vw,24px)}
     .fyp .g3{grid-template-columns:repeat(3,1fr)}
+    .fyp .g4{grid-template-columns:repeat(4,minmax(0,1fr));align-items:stretch}
+    .fyp .gh{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}
+    .fyp .homebar{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:14px 18px;margin:0 0 8px;border:1px solid color-mix(in srgb,var(--ink) 9%,transparent);background:color-mix(in srgb,var(--surface) 60%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+    .fyp .homebar .hb{font:600 12px ui-monospace,Menlo,monospace;letter-spacing:.28em;text-transform:uppercase;background:none;border:0;color:var(--ink);cursor:pointer;min-height:44px;padding:0}
+    .fyp .subnav{display:flex;flex-wrap:wrap;gap:0;width:100%;margin:0 0 8px;border:1px solid color-mix(in srgb,var(--ink) 9%,transparent)}
+    .fyp .subnav .btn{flex:1 1 0;min-width:0;border:0;border-right:1px solid color-mix(in srgb,var(--ink) 9%,transparent);text-align:center;padding:12px 8px}
+    .fyp .subnav .btn:last-child{border-right:0}
+    .fyp .morenav{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
+    .fyp .actrow{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:13px;align-items:baseline}
+    .fyp .actrow .ts{grid-column:span 3;white-space:nowrap;font:11px ui-monospace,Menlo,monospace;letter-spacing:.04em;opacity:.6}
+    .fyp .actrow .tx{grid-column:span 9;min-width:0;overflow-wrap:anywhere}
     .fyp .g2{grid-template-columns:1.4fr 1fr}
-    @media(max-width:860px){.fyp .g3,.fyp .g2{grid-template-columns:1fr}}
+    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .actrow .ts{grid-column:span 12}.fyp .actrow .tx{grid-column:span 12}.fyp .subnav .btn{flex:1 1 33%}}
     .fyp img,.fyp iframe{max-width:100%}
     .fyp .tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;width:100%;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
     .fyp .tabs::-webkit-scrollbar{display:none}
@@ -359,7 +370,9 @@ function Survey({ p, client, project, onDone, db, preview }: any) {
 function Dashboard({ p, client, project, db }: any) {
     const [tab, setTab] = React.useState("home")
     const first = (client?.name || p.nameOverride || "").split(" ")[0]
-    const tabs = [["home", "Home"], ["phases", "Phases"], ["roadmap", "12-Week Roadmap"], ["boards", "Mood Boards"], ["files", "Files"], ["team", "Project Directory"], ["permit", "Permit Path"], ["ffe", "FF&E"], ["ledger", "Ledger"], ["billing", "Billing"], ["family", "Family Insights"]]
+    // Primary sub-navigation (directive order). CHECKPOINTS = the Phases view. Everything else stays reachable in "More".
+    const tabs = [["home", "Home"], ["roadmap", "Roadmap"], ["ledger", "Ledger"], ["phases", "Checkpoints"], ["family", "Family Insights"], ["team", "Directory"]]
+    const more = [["boards", "Mood Boards"], ["files", "Files"], ["permit", "Permit Path"], ["ffe", "FF&E"], ["billing", "Billing"]]
     const pick = (k: string) => { setTab(k); try { window.scrollTo({ top: 0, behavior: "smooth" }) } catch {} }
     return (
         <div className="wrap">
@@ -370,9 +383,18 @@ function Dashboard({ p, client, project, db }: any) {
                 </div>
                 <button className="btn ghost" onClick={() => db.auth.signOut()}>Sign out</button>
             </div>
-            <div className="tabs" role="tablist">
+            <div className="homebar">
+                <button className="hb" aria-current={tab === "home" ? "page" : undefined} onClick={() => pick("home")}>Home{project?.title ? ` · ${project.title}` : ""}</button>
+                <button className={"btn" + (tab === "meet" ? "" : " ghost")} onClick={() => pick("meet")}>Meet</button>
+            </div>
+            <div className="subnav" role="tablist" aria-label="Project sections">
                 {tabs.map(([k, l]) => (
                     <button key={k} role="tab" aria-selected={tab === k} className={"btn" + (tab === k ? "" : " ghost")} onClick={() => pick(k)}>{l}</button>
+                ))}
+            </div>
+            <div className="morenav" role="tablist" aria-label="More sections">
+                {more.map(([k, l]) => (
+                    <button key={k} role="tab" aria-selected={tab === k} className={"btn" + (tab === k ? "" : " ghost")} style={{ padding: "8px 12px", fontSize: 11 }} onClick={() => pick(k)}>{l}</button>
                 ))}
             </div>
             {tab === "home" && <Home p={p} project={project} db={db} go={pick} />}
@@ -425,9 +447,7 @@ function Home({ p, project, db, go }: any) {
     const notion = p.notionUrl || LINKS.notion
     return (
       <div className="grid">
-        <div className="grid g2">
-            <div className="grid">
-                <div className="grid g3">
+        <div className="grid g4">
                     <div className="card" role="button" tabIndex={0} style={{ cursor: "pointer" }} onClick={() => go("phases")} onKeyDown={(e) => e.key === "Enter" && go("phases")}>
                         <div className="mono">Current phase</div>
                         <h2 style={{ fontSize: 30, marginTop: 10 }}>{current ? `Phase ${current.seq}` : "—"}</h2>
@@ -443,7 +463,16 @@ function Home({ p, project, db, go }: any) {
                         <h2 style={{ fontSize: 30, marginTop: 10 }}>{approved} / {ph.rows.filter((r: any) => r.seq <= 4).length || 4}</h2>
                         <div style={{ fontSize: 13, opacity: 0.7, marginTop: 6 }}>See the timeline</div>
                     </div>
+                <div className="card">
+                    <div className="mono">Soundtrack</div>
+                    {project?.playlist_id ? (
+                        <iframe title="Project playlist" style={{ border: 0, width: "100%", height: 152, marginTop: 12 }} loading="lazy"
+                            allow="autoplay; clipboard-write; encrypted-media" src={`https://open.spotify.com/embed/playlist/${project.playlist_id}?utm_source=generator&theme=0`} />
+                    ) : <p style={{ opacity: 0.6, fontSize: 13 }}>{project?.music_note || "A playlist curated for your project will appear here."}</p>}
                 </div>
+        </div>
+        <div className="grid gh">
+            <div className="grid">
                 <div className="card">
                     <div className="row" style={{ justifyContent: "space-between", flexWrap: "nowrap" }}><div className="mono">Progress</div><div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 30, color: "var(--accent)" }}>{overall}% complete</div></div>
                     <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
@@ -455,31 +484,28 @@ function Home({ p, project, db, go }: any) {
                     <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7 }}>{current?.summary || "Your first phase opens as soon as your survey is filed."}</p>
                 </div>
                 <ClientTasks project={project} db={db} studio={studioH} />
-                <div className="card">
-                    <div className="mono">Recent activity</div>
-                    {act.rows.slice(-8).reverse().map((a: any) => (
-                        <div key={a.id} style={{ padding: "10px 0", borderTop: LINE, fontSize: 13, display: "grid", gridTemplateColumns: "92px minmax(0,1fr)", gap: 14, alignItems: "baseline" }}>
-                            <span className="mono" style={{ opacity: 0.55, whiteSpace: "nowrap" }}>{new Date(a.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })} · {new Date(a.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-                            <span className="brk"><b style={{ fontWeight: 500 }}>{a.actor === "studio" ? "Studio" : a.actor === "client" ? "Client" : a.actor || ""}</b>{a.actor ? " · " : ""}{String(a.action).replace(/_/g, " ")}</span>
-                        </div>
-                    ))}
-                    {!act.rows.length && <p style={{ opacity: 0.6, fontSize: 13 }}>Nothing yet.</p>}
-                </div>
             </div>
             <div className="grid">
-                <div className="card">
-                    <div className="mono">Soundtrack</div>
-                    {project?.playlist_id ? (
-                        <iframe title="Project playlist" style={{ border: 0, width: "100%", height: 152, marginTop: 12 }} loading="lazy"
-                            allow="autoplay; clipboard-write; encrypted-media" src={`https://open.spotify.com/embed/playlist/${project.playlist_id}?utm_source=generator&theme=0`} />
-                    ) : <p style={{ opacity: 0.6, fontSize: 13 }}>{project?.music_note || "A playlist curated for your project will appear here."}</p>}
-                </div>
                 <div className="card">
                     <div className="mono">Schedule</div>
                     <p style={{ fontSize: 14, opacity: 0.75, lineHeight: 1.6 }}>Request time with the studio. We confirm to your calendar.</p>
                     <Meet project={project} db={db} compact />
                 </div>
             </div>
+        </div>
+        <div className="card">
+            <div className="mono">Recent activity</div>
+            {act.rows.slice(-8).reverse().map((a: any) => {
+                const d = new Date(a.created_at)
+                const stamp = `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
+                return (
+                    <div key={a.id} className="actrow">
+                        <span className="ts">{stamp}</span>
+                        <span className="tx"><b style={{ fontWeight: 500 }}>{a.actor === "studio" ? "Studio" : a.actor === "client" ? "Client" : a.actor || ""}</b>{a.actor ? " · " : ""}{String(a.action).replace(/_/g, " ")}</span>
+                    </div>
+                )
+            })}
+            {!act.rows.length && <p style={{ opacity: 0.6, fontSize: 13 }}>Nothing yet.</p>}
         </div>
         <Upcoming project={project} db={db} go={go} />
         <div className="card">

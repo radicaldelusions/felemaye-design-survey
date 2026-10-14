@@ -135,3 +135,10 @@ update public.jurisdiction_workflows set stages = '["DOB NOW: Build filing (Alt-
 -- submit_family_survey_v3 now accepts: resident, visit_freq, wish_essential, wish_maybe, wish_pass (arrays up to 90 items) in p_extra.
 -- Age is no longer collected (p_age_band is sent empty). family_survey_summary("extra") aggregates the new keys automatically.
 -- Read the live body: select pg_get_functiondef('public.submit_family_survey_v3'::regproc);
+
+-- ============================ ADDENDUM 5 (pass 6.0) — APPLIED ============================
+-- Studio notifications via the existing make_portal_events_webhook: function public.trg_notify_misc() + triggers
+--   trg_notify_task (client_tasks insert/status change -> task_assigned / task_<status>),
+--   trg_notify_family (family_survey_responses insert -> family_survey_submitted),
+--   trg_notify_receipt (project_receipts insert -> receipt_uploaded).
+-- The Make scenario behind that webhook must route these new "event" values to your studio inbox.
