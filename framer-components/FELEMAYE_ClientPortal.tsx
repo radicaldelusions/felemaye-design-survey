@@ -17,6 +17,7 @@ type Props = {
     stripeLink: string
     notionRoadmapEmbed: string
     arenaChannel: string
+    palette?: { name: string; note: string; material: string; tint?: string }[]
     driveFolderUrl: string
     welcomeEyebrow: string
     paper: string
@@ -813,29 +814,43 @@ function pdfThumb(url: string, key: string): Promise<string> {
     return PDF_THUMBS.get(key)!
 }
 /** A file's visual: image, PDF first page, Drive thumbnail, or a typographic tile. */
-function Thumb({ db, path, name, ratio = "4 / 3" }: { db: any; path: string; name: string; ratio?: string }) {
-    const isExt = String(path).startsWith("ext:")
+/** Studio-supplied preview for a private Drive file: stored at <project>/studio/previews/<driveId>.jpg. */
+const previewPath = (projectId: string, did: string) => `${projectId}/studio/previews/${did}.jpg`
+const kindOf = (name: string, url: string, did: string) => (did ? "drive" : IMG_RX.test(name) || IMG_RX.test(url) ? "img" : PDF_RX.test(name) || PDF_RX.test(url) ? "pdf" : "file")
+const badgeOf = (f: any, kind: string) => (extOf(f.name || "") ? "." + extOf(f.name || "") : kind === "drive" ? (/image|photo|inspo|reference/i.test((f.category || "") + " " + (f.name || "")) ? "IMAGE" : "DRIVE") : kind === "pdf" ? ".PDF" : "FILE")
+/** A file's visual: image, PDF first page, Drive image (studio preview → Google direct image), or a branded title card. */
+function Thumb({ db, f, ratio = "4 / 3", bump = 0, onDrive }: { db: any; f: any; ratio?: string; bump?: number; onDrive?: (url: string) => void }) {
+    const path = String(f.path || "")
     const url = useResolved(db, path)
-    const did = isExt ? driveId(url) : ""
-    const kind = did ? "drive" : IMG_RX.test(name) || IMG_RX.test(url) ? "img" : PDF_RX.test(name) || PDF_RX.test(url) ? "pdf" : "file"
-    const sources = did ? [`https://drive.google.com/thumbnail?id=${did}&sz=w1000`, `https://lh3.googleusercontent.com/d/${did}=w1000`] : kind === "img" && url ? [url] : []
+    const did = path.startsWith("ext:") ? driveId(url) : ""
+    const kind = kindOf(f.name || "", url, did)
+    const [studioPrev, setStudioPrev] = React.useState("")
+    React.useEffect(() => {
+        if (!did || !f.project_id) return
+        let live = true
+        signed(db, previewPath(f.project_id, did)).then((u) => live && setStudioPrev(u))
+        return () => { live = false }
+    }, [db, did, f.project_id, bump])
+    const sources = did ? [studioPrev, `https://lh3.googleusercontent.com/d/${did}=w1000`].filter(Boolean) : kind === "img" && url ? [url] : []
     const [i, setI] = React.useState(0)
-    const [pdf, setPdf] = React.useState("")
+    const [pdf, setPdf] = React.useState<string | null>(null) // null = still rendering, "" = could not render
     const [ok, setOk] = React.useState(false)
-    React.useEffect(() => { setI(0); setOk(false) }, [url])
-    React.useEffect(() => { if (kind === "pdf" && url) { let live = true; pdfThumb(url, path).then((d) => live && setPdf(d)); return () => { live = false } } }, [kind, url, path])
-    const src = kind === "pdf" ? pdf : sources[i]
-    const box: React.CSSProperties = { position: "relative", aspectRatio: ratio, overflow: "hidden", background: "color-mix(in srgb,var(--ink) 5%,var(--surface))" }
+    React.useEffect(() => { setI(0); setOk(false) }, [url, studioPrev])
+    React.useEffect(() => { if (kind === "pdf" && url) { let live = true; setPdf(null); pdfThumb(url, path).then((d) => live && setPdf(d)); return () => { live = false } } }, [kind, url, path])
+    const src = kind === "pdf" ? pdf || "" : sources[i]
+    const failed = !ok && (kind === "file" || (kind === "pdf" ? pdf === "" : i >= sources.length))
     return (
-        <div style={box}>
+        <div style={{ position: "relative", aspectRatio: ratio, overflow: "hidden", background: "color-mix(in srgb,var(--ink) 4%,var(--surface))" }}>
             {src && <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={() => setOk(true)} onError={() => { setOk(false); setI((n) => n + 1) }}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: kind === "pdf" ? "contain" : "cover", background: kind === "pdf" ? "#fff" : undefined, opacity: ok ? 1 : 0, transition: "opacity .5s ease" }} />}
             {!ok && (
-                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center", padding: 12 }}>
-                    <div>
-                        <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: "clamp(26px,3vw,36px)", lineHeight: 1, opacity: 0.8 }}>{kind === "drive" ? "Drive" : extOf(name) || "File"}</div>
-                        <div className="mono" style={{ marginTop: 8, opacity: 0.5 }}>{src || (kind === "pdf" && url && !pdf) ? "Loading preview" : "Preview on open"}</div>
-                    </div>
+                <div className="fy-tcard">
+                    <span className="fy-badge">{badgeOf(f, kind)}</span>
+                    <div className="fy-ttl">{String(f.name || "").replace(/^Reference\s·\s/, "")}</div>
+                    {kind === "drive" && failed ? (
+                        <span className="fy-gd" role="link" tabIndex={0} onClick={(e) => { e.stopPropagation(); onDrive ? onDrive(url) : window.open(url, "_blank", "noopener") }}
+                            onKeyDown={(e) => { if (e.key === "Enter") { e.stopPropagation(); window.open(url, "_blank", "noopener") } }}>View in Google Drive ↗</span>
+                    ) : <span className="mono" style={{ opacity: 0.5 }}>{failed ? "Tap to preview" : "Loading preview"}</span>}
                 </div>
             )}
         </div>
@@ -856,26 +871,147 @@ function ViewToggle({ value, onChange }: { value: "grid" | "list"; onChange: (v:
 }
 const GRID_CSS = `.fy-tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-top:16px}
 @media(max-width:520px){.fy-tg{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
-.fy-tc{display:block;color:inherit;text-decoration:none;cursor:pointer;border:1px solid color-mix(in srgb,var(--ink) 12%,transparent);background:var(--surface);transition:transform .35s ease,box-shadow .35s ease}
+.fy-tc{display:block;color:inherit;text-decoration:none;cursor:zoom-in;border:1px solid color-mix(in srgb,var(--ink) 12%,transparent);background:var(--surface);transition:transform .35s ease,box-shadow .35s ease;min-width:0}
 .fy-tc:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.12)}.fy-tc:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .fy-tc .cap{padding:10px 12px 12px}.fy-tc .nm{font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.fy-tcard{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;align-items:flex-start;padding:14px;gap:8px;background:linear-gradient(180deg,color-mix(in srgb,var(--ink) 3%,var(--surface)),color-mix(in srgb,var(--ink) 7%,var(--surface)))}
+.fy-badge{font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.14em;border:1px solid var(--ink);padding:3px 7px}
+.fy-ttl{font-family:'Cormorant Garamond',Georgia,serif;font-size:clamp(18px,2.2vw,24px);line-height:1.1;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.fy-gd{font:500 10px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;background:var(--ink);color:var(--paper);padding:9px 11px;cursor:pointer;min-height:34px;display:inline-flex;align-items:center}
 .fy-mas{column-count:3;column-gap:14px}@media(max-width:860px){.fy-mas{column-count:2}}@media(max-width:420px){.fy-mas{column-count:1}}
 .fy-mas figure{margin:0 0 14px;break-inside:avoid;position:relative}.fy-mas img{width:100%;display:block;transition:opacity .5s ease}
 .fy-mas a{display:block;color:inherit}.fy-mas a:hover img{opacity:.88}
-.fy-col{display:grid;grid-template-columns:2fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:4px;aspect-ratio:16/9}.fy-col>*:first-child{grid-row:span 2}
-.fy-col img{width:100%;height:100%;object-fit:cover;display:block}@media(max-width:520px){.fy-col{aspect-ratio:4/3}}`
-/** Opens a file the way FileLink does (signed URL or external link) — used by grid cards. */
+.fy-row{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:10px 0 10px 12px;border-top:.5px dashed color-mix(in srgb,var(--ink) 20%,transparent)}
+.fy-row .ql{background:none;border:0;padding:0;color:inherit;text-align:left;cursor:zoom-in;font-size:14px;flex:1 1 200px;overflow-wrap:anywhere;display:flex;gap:12px;align-items:center}
+.fy-row .mini{width:56px;flex:0 0 56px}
+.fy-acc>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:14px 0}.fy-acc>summary::-webkit-details-marker{display:none}
+.fy-acc .num{font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.12em;opacity:.55;margin-right:10px}
+.fy-acc .chev{transition:transform .25s ease;display:inline-block;margin-left:10px;opacity:.6}.fy-acc[open] .chev{transform:rotate(180deg)}
+.fy-acc.empty>summary{opacity:.5}
+.fy-ql{position:fixed;inset:0;z-index:1000;background:rgba(11,11,12,.92);display:flex;flex-direction:column;color:#EDE6D8}
+.fy-ql .bar{display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px clamp(12px,3vw,24px);border-bottom:1px solid rgba(237,230,216,.14)}
+.fy-ql .bar .t{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.fy-ql .bar a,.fy-ql .bar button{font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase;color:#EDE6D8;background:transparent;border:1px solid rgba(237,230,216,.5);padding:10px 12px;text-decoration:none;cursor:pointer;min-height:40px;white-space:nowrap}
+.fy-ql .bar button.x{background:#EDE6D8;color:#0B0B0C;border-color:#EDE6D8}
+.fy-ql .stage{flex:1 1 auto;min-height:0;overflow:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;display:flex;align-items:flex-start;justify-content:center;padding:clamp(8px,2vw,24px)}
+.fy-ql .stage img{max-width:100%;max-height:100%;object-fit:contain;cursor:zoom-in;margin:auto}.fy-ql .stage img.z{max-width:none;max-height:none;width:200%;cursor:zoom-out}
+.fy-ql .pages{display:grid;gap:12px;width:min(900px,100%)}.fy-ql .pages canvas{width:100%;height:auto;background:#fff;display:block}
+.fy-ql iframe{border:0;width:min(1100px,100%);height:100%;min-height:70vh;background:#fff}`
+/** Opens a file in a new tab (signed URL or external link). */
 async function openFile(db: any, path: string) {
     if (path.startsWith("ext:")) { window.open(path.slice(4), "_blank", "noopener"); return }
     const u = await signed(db, path)
     if (u) window.open(u, "_blank", "noopener")
 }
-function FileCard({ db, f, meta, label }: { db: any; f: any; meta?: string; label: string }) {
+/** Quick Look: an in-portal overlay — image zoom, every PDF page, the Drive viewer — with Close and an optional new-tab link. */
+function QuickLook({ db, f, onClose }: { db: any; f: any; onClose: () => void }) {
+    const path = String(f.path || "")
+    const url = useResolved(db, path)
+    const did = path.startsWith("ext:") ? driveId(url) : ""
+    const kind = kindOf(f.name || "", url, did)
+    const [zoom, setZoom] = React.useState(false)
+    const [prev, setPrev] = React.useState("")
+    const [pages, setPages] = React.useState<string[] | null>(null)
+    const closeRef = React.useRef<HTMLButtonElement>(null)
+    React.useEffect(() => {
+        const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose() }
+        window.addEventListener("keydown", k)
+        const ov = document.documentElement.style.overflow
+        document.documentElement.style.overflow = "hidden"
+        closeRef.current?.focus()
+        return () => { window.removeEventListener("keydown", k); document.documentElement.style.overflow = ov }
+    }, [onClose])
+    React.useEffect(() => { if (did && f.project_id) signed(db, previewPath(f.project_id, did)).then(setPrev) }, [db, did, f.project_id])
+    React.useEffect(() => {
+        if (kind !== "pdf" || !url) return
+        let live = true
+        PDFJS = PDFJS || import(/* @vite-ignore */ "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs").then((m: any) => { m.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs"; return m })
+        PDFJS.then(async (pdfjs: any) => {
+            const doc = await pdfjs.getDocument({ url }).promise
+            const out: string[] = []
+            for (let n = 1; n <= Math.min(doc.numPages, 24) && live; n++) {
+                const page = await doc.getPage(n), v0 = page.getViewport({ scale: 1 }), v = page.getViewport({ scale: Math.min(2, 1600 / v0.width) })
+                const c = document.createElement("canvas"); c.width = v.width; c.height = v.height
+                await page.render({ canvasContext: c.getContext("2d"), viewport: v }).promise
+                out.push(c.toDataURL("image/jpeg", 0.86)); if (live) setPages([...out])
+            }
+        }).catch(() => live && setPages([]))
+        return () => { live = false }
+    }, [kind, url])
+    const ext = did ? `https://drive.google.com/file/d/${did}/view` : url
     return (
-        <a className="fy-tc" role="link" tabIndex={0} onClick={() => openFile(db, f.path)} onKeyDown={(e) => { if (e.key === "Enter") openFile(db, f.path) }}>
-            <Thumb db={db} path={f.path} name={f.name || ""} />
-            <div className="cap"><div className="nm">{f.name}</div>{meta && <div style={{ opacity: 0.45, fontSize: 11, marginTop: 4 }}>{meta}</div>}<div className="mono" style={{ marginTop: 8 }}>{label} ↗</div></div>
-        </a>
+        <div className="fy-ql" role="dialog" aria-modal="true" aria-label={`Preview: ${f.name}`} onClick={onClose}>
+            <div className="bar" onClick={(e) => e.stopPropagation()}>
+                <span className="t">{f.name}</span>
+                <span style={{ display: "flex", gap: 8, flex: "0 0 auto" }}>
+                    {ext && <a href={ext} target="_blank" rel="noopener">{did ? "Drive ↗" : "New tab ↗"}</a>}
+                    <button ref={closeRef} className="x" onClick={onClose} aria-label="Close preview">Close ✕</button>
+                </span>
+            </div>
+            <div className="stage" onClick={(e) => e.stopPropagation()}>
+                {kind === "img" && url && <img src={url} alt={f.name || ""} className={zoom ? "z" : ""} onClick={() => setZoom((z) => !z)} />}
+                {kind === "drive" && (prev ? <img src={prev} alt={f.name || ""} className={zoom ? "z" : ""} onClick={() => setZoom((z) => !z)} />
+                    : <iframe title={f.name || "Drive preview"} src={`https://drive.google.com/file/d/${did}/preview`} allow="autoplay" />)}
+                {kind === "pdf" && (pages === null ? <p className="mono" style={{ color: "#EDE6D8" }}>Opening document…</p>
+                    : pages.length ? <div className="pages">{pages.map((d, n) => <img key={n} src={d} alt={`Page ${n + 1}`} style={{ width: "100%", maxHeight: "none", cursor: "default" }} />)}</div>
+                        : <p className="mono" style={{ color: "#EDE6D8" }}>This document can't be previewed here. Use “New tab”.</p>)}
+                {kind === "file" && (
+                    <div style={{ textAlign: "center", marginTop: "12vh" }}>
+                        <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 44 }}>{extOf(f.name || "") || "File"}</div>
+                        <p className="mono" style={{ color: "#EDE6D8", marginTop: 10 }}>No in-browser preview for this file type.</p>
+                        <button className="btn" style={{ marginTop: 18 }} onClick={() => openFile(db, path)}>Download</button>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+}
+/** Studio-only: attach a preview image to a private Drive reference (downloaded from Drive once, shown to the client). */
+function StudioPreviewButton({ db, f, onDone }: { db: any; f: any; onDone: () => void }) {
+    const ref = React.useRef<HTMLInputElement>(null)
+    const [busy, setBusy] = React.useState(false)
+    const did = driveId(String(f.path || "").replace(/^ext:/, ""))
+    if (!did || !f.project_id) return null
+    return (
+        <span onClick={(e) => e.stopPropagation()}>
+            <input ref={ref} type="file" accept="image/*" style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} onChange={async (e) => {
+                const file = e.target.files?.[0]; e.target.value = ""
+                if (!file) return
+                setBusy(true)
+                const path = previewPath(f.project_id, did)
+                const { error } = await db.storage.from("project-files").upload(path, file, { upsert: true, contentType: file.type || "image/jpeg" })
+                setBusy(false)
+                if (!error) { SIGNED.delete(path); onDone() } else alert("Preview upload failed: " + error.message)
+            }} />
+            <a className="mono" style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 4 }} onClick={() => ref.current?.click()}>{busy ? "Uploading…" : "Studio · add preview"}</a>
+        </span>
+    )
+}
+function FileCard({ db, f, meta, onOpen, studio, bump, onBump }: { db: any; f: any; meta?: string; onOpen: () => void; studio?: boolean; bump?: number; onBump?: () => void }) {
+    return (
+        <div className="fy-tc" role="button" tabIndex={0} aria-label={`Preview ${f.name}`} onClick={onOpen} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen() } }}>
+            <Thumb db={db} f={f} bump={bump} />
+            <div className="cap">
+                <div className="nm">{f.name}</div>
+                {meta && <div style={{ opacity: 0.45, fontSize: 11, marginTop: 4 }}>{meta}</div>}
+                <div className="row" style={{ justifyContent: "space-between", marginTop: 8, gap: 8 }}>
+                    <span className="mono">Preview</span>
+                    <a className="mono" style={{ cursor: "pointer" }} onClick={(e) => { e.stopPropagation(); openFile(db, f.path) }} aria-label={`Open ${f.name} in a new tab`}>↗</a>
+                </div>
+                {studio && String(f.path).startsWith("ext:") && <div style={{ marginTop: 8 }}><StudioPreviewButton db={db} f={f} onDone={() => onBump && onBump()} /></div>}
+            </div>
+        </div>
+    )
+}
+function FileRow({ db, f, meta, onOpen, label }: { db: any; f: any; meta?: string; onOpen: () => void; label: string }) {
+    return (
+        <div className="fy-row">
+            <button type="button" className="ql" onClick={onOpen} aria-label={`Preview ${f.name}`}>
+                <span className="mini"><Thumb db={db} f={f} ratio="1 / 1" /></span>
+                <span>{f.name}{meta && <span style={{ opacity: 0.45, fontSize: 11 }}> · {meta}</span>}</span>
+            </button>
+            <FileLink db={db} path={f.path} label={label} />
+        </div>
     )
 }
 function StoredImg({ db, src, alt }: { db: any; src: string; alt: string }) {
@@ -893,6 +1029,66 @@ function arenaChannel(input: string | undefined) {
         if (/are\.na$/.test(u.hostname) && parts.length >= 2) return { slug: parts[parts.length - 1], url: raw }
         return { slug: LINKS.arenaSlug, url: LINKS.arenaUrl } // a profile link has no channel: use the project channel
     } catch { return { slug: raw.replace(/^\/+|\/+$/g, ""), url: raw === LINKS.arenaSlug ? LINKS.arenaUrl : `https://www.are.na/channel/${raw}` } }
+}
+
+/* ───────────── Physical palette ─────────────
+   Each material shows the studio's photograph of the physical sample when one is posted
+   (<project>/studio/palette/<slug>.jpg), otherwise a physically based render (roughness, normal relief, AO,
+   environment light) from the FELEMAYE renderer, loaded only when this tab opens. Edit the list in the Framer sidebar. */
+type PaletteItem = { name: string; note: string; material: string; tint?: string }
+const PALETTE: PaletteItem[] = [
+    { name: "Patinated Copper", note: "Front gate and hardware · from the copper gate references", material: "brass", tint: "#A8653F" },
+    { name: "Lime Plaster over Block", note: "Courtyard walls · from the block and curved-wall references", material: "plaster", tint: "#E4DCCD" },
+    { name: "Terracotta Floor Tile", note: "Courtyard floor · from the floor tile references", material: "terracotta" },
+]
+const PBR_URL = "https://radicaldelusions.github.io/felemaye-design-survey/assets/felemaye-pbr.mjs"
+let PBR_MOD: Promise<any> | null = null
+const slugify = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")
+function PaletteSwatch({ db, project, it, studio }: { db: any; project: any; it: PaletteItem; studio: boolean }) {
+    const photoPath = project?.id ? `${project.id}/studio/palette/${slugify(it.name)}.jpg` : ""
+    const [photo, setPhoto] = React.useState("")
+    const [render, setRender] = React.useState("")
+    const [bump, setBump] = React.useState(0)
+    const input = React.useRef<HTMLInputElement>(null)
+    React.useEffect(() => { if (photoPath) { let live = true; signed(db, photoPath).then((u) => live && setPhoto(u)); return () => { live = false } } }, [db, photoPath, bump])
+    React.useEffect(() => {
+        let live = true
+        PBR_MOD = PBR_MOD || import(/* @vite-ignore */ PBR_URL)
+        PBR_MOD.then((m: any) => m.renderSwatch({ preset: "object", material: it.material, tint: it.tint || undefined, form: /brass|gilt|glaze|stoneware/.test(it.material) ? "vessel" : "slab", ground: "#2a241e", size: 560 }))
+            .then((u: string) => live && setRender(u)).catch(() => {})
+        return () => { live = false }
+    }, [it.material, it.tint])
+    const src = photo || render
+    return (
+        <figure style={{ margin: 0 }}>
+            <div style={{ aspectRatio: "1 / 1", overflow: "hidden", background: "#2a241e", position: "relative" }}>
+                {src && <img src={src} alt={`${it.name} sample`} style={{ width: "100%", height: "100%", objectFit: "cover", display: "block", transition: "opacity .6s ease" }} />}
+                {!src && <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", color: "#EDE6D8" }}><span className="mono" style={{ color: "#EDE6D8" }}>Rendering sample</span></div>}
+            </div>
+            <figcaption style={{ marginTop: 12 }}>
+                <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 24, lineHeight: 1.1 }}>{it.name}</div>
+                <div style={{ fontSize: 13, opacity: 0.65, lineHeight: 1.55, marginTop: 6 }}>{it.note}</div>
+                {studio && photoPath && (
+                    <span>
+                        <input ref={input} type="file" accept="image/*" style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} onChange={async (e) => {
+                            const f = e.target.files?.[0]; e.target.value = ""; if (!f) return
+                            const { error } = await db.storage.from("project-files").upload(photoPath, f, { upsert: true, contentType: f.type || "image/jpeg" })
+                            if (error) alert("Sample photo upload failed: " + error.message); else { SIGNED.delete(photoPath); setBump((n) => n + 1) }
+                        }} />
+                        <a className="mono" style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 4, display: "inline-block", marginTop: 8 }} onClick={() => input.current?.click()}>Studio · {photo ? "replace" : "add"} sample photo</a>
+                    </span>
+                )}
+            </figcaption>
+        </figure>
+    )
+}
+function Palette({ db, project, studio, items }: { db: any; project: any; studio: boolean; items: PaletteItem[] }) {
+    return (
+        <div className="fy-pal" style={{ display: "grid", gridTemplateColumns: "repeat(3,minmax(0,1fr))", gap: "clamp(12px,2vw,24px)", marginTop: 8 }}>
+            <style>{`@media(max-width:700px){.fy-pal{grid-template-columns:1fr!important}}`}</style>
+            {items.slice(0, 3).map((it) => <PaletteSwatch key={it.name} db={db} project={project} it={it} studio={studio} />)}
+        </div>
+    )
 }
 
 function Boards({ p, project, db }: any) {
@@ -947,23 +1143,24 @@ function Boards({ p, project, db }: any) {
         setSnapBusy(false); items.reload()
     }
     const own = items.rows.filter((i: any) => i.url && !isSnap(i))
-    const collage = [...own.map((i: any) => ({ k: "i" + i.id, src: i.url })), ...arena.map((b: any) => ({ k: "a" + b.id, src: b.image.display.url }))].slice(0, 5)
     return (
         <div className="grid">
             <style>{GRID_CSS}</style>
             <div className="card">
                 <div className="mono">Material &amp; mood board</div>
                 <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, maxWidth: 620 }}>Our working material direction for the courtyard: stone, masonry, metals and color. It grows as we move from the Phase 1 curation board into the Phase 2 lookbook.</p>
-                {/* Mattoboard refuses to load inside other sites (frame-ancestors 'none'), so the portal shows the studio's latest
-                    snapshot, or a live collage of the project's images until one is posted. Tapping opens the interactive 3D board. */}
-                <a href={matter} target="_blank" rel="noopener" style={{ display: "block", position: "relative", color: "inherit", textDecoration: "none", border: "1px solid color-mix(in srgb,var(--ink) 14%,transparent)", overflow: "hidden" }}>
-                    {snap ? <div className="fy-mas" style={{ columnCount: 1 }}><StoredImg db={db} src={snap.url} alt="Latest material board snapshot" /></div>
-                        : collage.length ? (
-                            <div className="fy-col" style={collage.length < 3 ? { gridTemplateColumns: "1fr", gridTemplateRows: "1fr" } : undefined}>{(collage.length < 3 ? collage.slice(0, 1) : collage).map((c) => <div key={c.k} style={{ overflow: "hidden", minHeight: 0 }}><StoredImg db={db} src={c.src} alt="" /></div>)}</div>
-                        ) : <div style={{ minHeight: 220, display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}><div><div className="mono">Material board</div><div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 26, marginTop: 8 }}>Open the live board</div></div></div>}
-                    <span className="btn" style={{ position: "absolute", right: 12, bottom: 12, textDecoration: "none" }}>Open live board ↗</span>
-                </a>
-                <p className="mono" style={{ marginTop: 10 }}>{snap ? `Snapshot updated ${new Date(snap.created_at).toLocaleDateString()} · tap the image for the live, interactive board` : "The live board opens in a new tab. A snapshot appears here as the studio updates it."}</p>
+                {/* Mattoboard refuses to be framed by other sites (frame-ancestors 'none'). The card shows the studio's latest
+                    snapshot of the board; until one is posted it shows the physical palette. The live 3D board opens in one tap. */}
+                {snap ? (
+                    <a href={matter} target="_blank" rel="noopener" style={{ display: "block", position: "relative", color: "inherit", textDecoration: "none", border: "1px solid color-mix(in srgb,var(--ink) 14%,transparent)", overflow: "hidden" }}>
+                        <div className="fy-mas" style={{ columnCount: 1 }}><StoredImg db={db} src={snap.url} alt="Latest material board snapshot" /></div>
+                        <span className="btn" style={{ position: "absolute", right: 12, bottom: 12, textDecoration: "none" }}>Open Live Material Board ↗</span>
+                    </a>
+                ) : <Palette db={db} project={project} studio={studio} items={p.palette && p.palette.length ? p.palette : PALETTE} />}
+                <div className="row" style={{ marginTop: 14, justifyContent: "space-between" }}>
+                    <span className="mono">{snap ? `Board snapshot · ${new Date(snap.created_at).toLocaleDateString()}` : "Physical palette · samples confirmed at review"}</span>
+                    {!snap && <a className="btn" href={matter} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Open Live Material Board ↗</a>}
+                </div>
                 {studio && (
                     <div className="row" style={{ marginTop: 12 }}>
                         <input ref={snapInput} type="file" accept="image/*" onChange={postSnapshot} style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />
@@ -1025,22 +1222,58 @@ function SurveyCopy({ db, client }: any) {
     )
 }
 
-const FILE_CATS: [string, string, string][] = [
-    ["meeting_notes", "Meeting Notes", "Agendas, call summaries and decisions"],
-    ["submittals", "Submittals", "Materials, product data, samples and approvals"],
-    ["presentations", "Presentations", "Decks and design-review packets"],
-    ["images", "Images", "Photos, renderings and site documentation"],
-    ["drawings", "Drawings & Models", "Plans, sections, details and 3D files"],
-    ["documents", "Contracts & Documents", "Agreements, permits, surveys and reports"],
-    ["other", "Other", "Everything else"],
+/* Project archive: numbered folders from a full-service client's point of view. 3D CAD models are not filed in the
+   client archive (they appear under "Other files" only if one is ever shared). */
+const ARCHIVE: [string, string, string, string][] = [
+    ["agreements", "00", "Agreements & Proposals", "Retainers, contracts and scope briefs"],
+    ["presentations", "01", "Presentations & Decks", "SD and DD deliverables, lookbooks and concept sets"],
+    ["meetings", "02", "Meeting Notes & Transcripts", "Site visits, studio notes and minutes"],
+    ["site", "03", "Site Photos & Survey Data", "Existing conditions and field measurements"],
+    ["drawings", "04", "Drawings, Sketches & Permits", "Site plans, CAD elevation exports and permit sets"],
+    ["renderings", "05", "Renderings & Visualizations", "3D perspectives and material maps"],
+    ["specs", "06", "Specifications & FF&E Schedules", "Sourcing guides and spec sheets"],
 ]
-const guessCat = (name: string) => (/\.(png|jpe?g|gif|webp|heic|avif|tiff?)$/i.test(name) ? "images" : /\.(pptx?|key)$/i.test(name) ? "presentations" : /\.(dwg|dxf|rvt|skp|3dm|obj|ifc)$/i.test(name) ? "drawings" : /\.(docx?|pdf|txt|xlsx?)$/i.test(name) ? "documents" : "other")
+const ARCHIVE_KEYS = ARCHIVE.map((a) => a[0])
+// Earlier folder names still on file rows map onto the new ones; generic ones are re-read from the file name.
+const LEGACY_CAT: Record<string, string> = { meeting_notes: "meetings", submittals: "specs", presentations: "presentations", drawings: "drawings" }
+const MODEL_RX = /\.(rvt|rfa|skp|3dm|obj|fbx|glb|gltf|ifc|max|blend|c4d)$/i
+function guessCat(name: string, direction?: string) {
+    const n = (name || "").toLowerCase()
+    if (MODEL_RX.test(n)) return "other"
+    if (/proposal|agreement|contract|retainer|scope|engagement|\bnda\b|invoice|w-?9/.test(n)) return "agreements"
+    if (/deck|presentation|lookbook|concept|package|\bsd\b|\bdd\b|review packet|\.(pptx?|key)$/.test(n)) return "presentations"
+    if (/notes|minutes|transcript|agenda|meeting|site visit|recap/.test(n)) return "meetings"
+    if (/render|visuali[sz]|perspective|material map|\bviz\b|\bcgi\b/.test(n)) return "renderings"
+    if (/spec|ff&?e|schedule|sourcing|cut ?sheet|product data|submittal/.test(n)) return "specs"
+    if (/site photo|existing|measure|field|as-?built|survey data|topo/.test(n)) return "site"
+    if (/permit|plan|elevation|section|detail|sheet|drawing|sketch|\.(dwg|dxf)$/.test(n)) return "drawings"
+    if (IMG_RX.test(n)) return direction === "studio" || direction === "studio_to_client" ? "renderings" : "site"
+    if (/\.(pdf|docx?)$/.test(n)) return "agreements"
+    return "other"
+}
+const archiveCat = (f: any) => (ARCHIVE_KEYS.includes(f.category) ? f.category : LEGACY_CAT[f.category] || guessCat(f.name || "", f.direction))
+// Folders that matter in each phase open by default; the rest stay folded.
+function phaseFolders(title: string): string[] {
+    const t = (title || "").toLowerCase()
+    if (/pre-?design|zoning|feasib/.test(t)) return ["agreements", "meetings", "site", "drawings"]
+    if (/schematic/.test(t)) return ["presentations", "meetings", "renderings"]
+    if (/design development/.test(t)) return ["presentations", "renderings", "specs"]
+    if (/construction|engineering/.test(t)) return ["drawings", "specs"]
+    if (/site advisory|quality/.test(t)) return ["meetings", "site"]
+    return ["agreements", "presentations"]
+}
 function Files({ p, project, db, client }: any) {
     const files = useRows(db, "project_files", project?.id)
+    const phases = useRows(db, "phases", project?.id, "seq")
     const [busy, setBusy] = React.useState(false)
     const [cat, setCat] = React.useState("auto")
     const [msg, setMsg] = React.useState("")
+    const [look, setLook] = React.useState<any>(null)
+    const [studio, setStudio] = React.useState(false)
+    const [bump, setBump] = React.useState(0)
+    const [open, setOpen] = React.useState<Record<string, boolean> | null>(null)
     const inputRef = React.useRef<HTMLInputElement>(null)
+    React.useEffect(() => { db.rpc("is_studio").then(({ data }: any) => setStudio(!!data), () => {}) }, [db])
     async function up(e: React.ChangeEvent<HTMLInputElement>) {
         const list = Array.from(e.target.files || [])
         if (!list.length) return
@@ -1053,7 +1286,7 @@ function Files({ p, project, db, client }: any) {
             const path = `${project.id}/client/${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_")}`
             const { error } = await db.storage.from("project-files").upload(path, f)
             if (error) { setMsg(`Couldn't upload ${f.name}: ${error.message}`); continue }
-            const { error: e2 } = await db.from("project_files").insert({ project_id: project.id, path, name: f.name, size_bytes: f.size, direction: "client", uploaded_by: email, category: cat === "auto" ? guessCat(f.name) : cat })
+            const { error: e2 } = await db.from("project_files").insert({ project_id: project.id, path, name: f.name, size_bytes: f.size, direction: "client", uploaded_by: email, category: cat === "auto" ? guessCat(f.name, "client") : cat })
             if (e2) { setMsg(`Uploaded ${f.name} but couldn't file it: ${e2.message}`); continue }
             ok++
         }
@@ -1066,6 +1299,21 @@ function Files({ p, project, db, client }: any) {
     const drive = p.driveFolderUrl || LINKS.drive
     const line = ".5px solid color-mix(in srgb,var(--ink) 25%,transparent)"
     const [view, setView] = useViewMode("files")
+    const active = phases.rows.find((r: any) => r.status === "active") || phases.rows.find((r: any) => r.status !== "approved")
+    const byCat: Record<string, any[]> = {}
+    rest.forEach((f: any) => { const k = archiveCat(f); (byCat[k] = byCat[k] || []).push(f) })
+    Object.values(byCat).forEach((l) => l.sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at))))
+    const folders = [...ARCHIVE, ...(byCat.other?.length ? [["other", "··", "Other files", "Anything that doesn't fit the folders above"] as [string, string, string, string]] : [])]
+    // Open state: phase folders + anything filed in the last 21 days start open; empty folders start closed.
+    React.useEffect(() => {
+        if (open || files.loading || phases.loading) return
+        const want = new Set(phaseFolders(active?.title || ""))
+        const recent = Date.now() - 21 * 864e5
+        const o: Record<string, boolean> = {}
+        folders.forEach(([k]) => { const l = byCat[k] || []; o[k] = l.length > 0 && (want.has(k) || l.some((f: any) => Date.parse(f.created_at) > recent)) })
+        setOpen(o)
+    }, [files.loading, phases.loading, files.rows.length])
+    const who = (f: any) => `${f.direction === "studio" || f.direction === "studio_to_client" ? "from the studio" : "from you"} · ${new Date(f.created_at).toLocaleDateString()}`
     return (
         <div className="grid">
             <style>{GRID_CSS}</style>
@@ -1075,7 +1323,7 @@ function Files({ p, project, db, client }: any) {
                 <input ref={inputRef} type="file" multiple onChange={up} style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />
                 <select aria-label="File folder" value={cat} onChange={(e) => setCat(e.target.value)} style={{ marginBottom: 14, maxWidth: 360 }}>
                     <option value="auto">File it for me</option>
-                    {FILE_CATS.map(([k, l]) => <option key={k} value={k}>Folder: {l}</option>)}
+                    {ARCHIVE.map(([k, n, l]) => <option key={k} value={k}>Folder: {n} · {l}</option>)}
                 </select>
                 <div className="row stack-m">
                     <button className="btn" disabled={busy} onClick={() => inputRef.current?.click()}>{busy ? "Uploading…" : "Choose files"}</button>
@@ -1089,38 +1337,30 @@ function Files({ p, project, db, client }: any) {
                     <div className="row" style={{ justifyContent: "space-between" }}><div className="mono">Reference library</div><ViewToggle value={view} onChange={setView} /></div>
                     <p style={{ fontSize: 14, opacity: 0.7, lineHeight: 1.7, margin: "8px 0 4px" }}>Your inspiration images, gathered from your Drive folder. The studio sorts these into the right phase as the design develops.</p>
                     {view === "grid" ? (
-                        <div className="fy-tg">{ref.map((f: any) => <FileCard key={f.id} db={db} f={f} label="Open" />)}</div>
-                    ) : ref.map((f: any) => (
-                        <div key={f.id} className="row" style={{ justifyContent: "space-between", padding: "12px 0", borderTop: line }}>
-                            <span style={{ fontSize: 14 }}>{f.name}</span>
-                            <FileLink db={db} path={f.path} label="Open" />
-                        </div>
-                    ))}
+                        <div className="fy-tg">{ref.map((f: any) => <FileCard key={f.id} db={db} f={f} onOpen={() => setLook(f)} studio={studio} bump={bump} onBump={() => setBump((n) => n + 1)} />)}</div>
+                    ) : <div>{ref.map((f: any) => <FileRow key={f.id} db={db} f={f} onOpen={() => setLook(f)} label="Open" />)}</div>}
                 </div>
             )}
             <div className="card">
                 <div className="row" style={{ justifyContent: "space-between" }}><div className="mono">Project archive</div>{!ref.length && <ViewToggle value={view} onChange={setView} />}</div>
                 <p style={{ fontSize: 14, opacity: 0.7, lineHeight: 1.7, margin: "8px 0 6px" }}>Everything filed for your project, sorted by type. Newest first.</p>
-                {FILE_CATS.map(([k, label, hint]) => {
-                    const inCat = rest.filter((f: any) => (f.category || guessCat(f.name || "")) === k).sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))
+                {folders.map(([k, num, label, hint]) => {
+                    const inCat = byCat[k] || []
+                    const isOpen = !!open?.[k]
                     return (
-                        <details key={k} open={inCat.length > 0 && k !== "other"} style={{ borderTop: line }}>
-                            <summary style={{ cursor: "pointer", listStyle: "none", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "14px 0" }}>
-                                <span><span style={{ fontSize: 16 }}>{label}</span><span className="brk" style={{ display: "block", fontSize: 12, opacity: 0.55, marginTop: 2 }}>{hint}</span></span>
-                                <span className="pill" style={{ flex: "0 0 auto" }}>{inCat.length}</span>
+                        <details key={k} className={"fy-acc" + (inCat.length ? "" : " empty")} open={isOpen} onToggle={(e) => { const v = (e.currentTarget as HTMLDetailsElement).open; if (v !== isOpen) setOpen((o) => ({ ...(o || {}), [k]: v })) }} style={{ borderTop: line }}>
+                            <summary>
+                                <span><span className="num">{num}</span><span style={{ fontSize: 16 }}>{label}</span><span className="brk" style={{ display: "block", fontSize: 12, opacity: 0.55, marginTop: 2, marginLeft: 0 }}>{hint}</span></span>
+                                <span style={{ flex: "0 0 auto", display: "inline-flex", alignItems: "center" }}><span className="pill">{inCat.length}</span><span className="chev" aria-hidden="true">⌄</span></span>
                             </summary>
-                            {view === "grid" && inCat.length > 0 && <div className="fy-tg" style={{ margin: "0 0 16px" }}>{inCat.map((f: any) => <FileCard key={f.id} db={db} f={f} label="Download" meta={`${f.direction === "studio" || f.direction === "studio_to_client" ? "from the studio" : "from you"} · ${new Date(f.created_at).toLocaleDateString()}`} />)}</div>}
-                            {view === "list" && inCat.map((f: any) => (
-                                <div key={f.id} className="row" style={{ justifyContent: "space-between", padding: "10px 0 10px 12px", borderTop: ".5px dashed color-mix(in srgb,var(--ink) 20%,transparent)" }}>
-                                    <span className="brk" style={{ fontSize: 14, flex: "1 1 200px" }}>{f.name} <span style={{ opacity: 0.45, fontSize: 11 }}>· {f.direction === "studio" || f.direction === "studio_to_client" ? "from the studio" : "from you"} · {new Date(f.created_at).toLocaleDateString()}</span></span>
-                                    <FileLink db={db} path={f.path} label="Download" />
-                                </div>
-                            ))}
+                            {view === "grid" && inCat.length > 0 && <div className="fy-tg" style={{ margin: "0 0 16px" }}>{inCat.map((f: any) => <FileCard key={f.id} db={db} f={f} meta={who(f)} onOpen={() => setLook(f)} />)}</div>}
+                            {view === "list" && inCat.map((f: any) => <FileRow key={f.id} db={db} f={f} meta={who(f)} onOpen={() => setLook(f)} label="Download" />)}
                             {!inCat.length && <p style={{ opacity: 0.5, fontSize: 13, margin: "0 0 14px 12px" }}>Nothing filed here yet.</p>}
                         </details>
                     )
                 })}
             </div>
+            {look && <QuickLook db={db} f={look} onClose={() => setLook(null)} />}
         </div>
     )
 }
@@ -1860,6 +2100,15 @@ addPropertyControls(ClientPortal, {
     cardPayUrl: { type: ControlType.String, title: "Card pay link" },
     familySurveyUrl: { type: ControlType.String, title: "Family survey link" },
     arenaChannel: { type: ControlType.String, title: "Are.na channel" },
+    palette: {
+        type: ControlType.Array, title: "Material palette", maxCount: 3,
+        control: { type: ControlType.Object, controls: {
+            name: { type: ControlType.String, title: "Material" },
+            note: { type: ControlType.String, title: "Callout" },
+            material: { type: ControlType.Enum, title: "Render as", options: ["brass", "gilt", "plaster", "terracotta", "travertine", "marble", "stone", "stoneware", "glaze", "walnut", "oak", "cedar", "wool", "linen", "velvet", "boucle", "lacquer"] },
+            tint: { type: ControlType.Color, title: "Tint" },
+        } },
+    },
     driveFolderUrl: { type: ControlType.String, title: "Drive folder" },
     welcomeEyebrow: { type: ControlType.String, title: "Eyebrow" },
     paper: { type: ControlType.Color, title: "Paper" },
