@@ -314,14 +314,39 @@ function Survey({ p, client, project, onDone, db, preview }: any) {
         if (project) { u.searchParams.set("pid", project.id); u.searchParams.set("pn", project.title || ""); u.searchParams.set("addr", project.address || ""); u.searchParams.set("noun", project.noun || "") }
         return u.toString()
     }, [p.surveyUrl, client, project, preview])
-    const [surveyH, setSurveyH] = React.useState<number | string>("min(1400px,140vh)")
+    // The survey scrolls inside its own frame (85vh), so its sticky Back/Continue bar stays in reach on phones.
+    // A reported content height only shrinks the frame for short steps; it never clips a tall one.
+    const [surveyH, setSurveyH] = React.useState<number | null>(null)
+    const frame = React.useRef<HTMLIFrameElement>(null)
+    const surveyOrigin = React.useMemo(() => { try { return new URL(p.surveyUrl).origin } catch { return "" } }, [p.surveyUrl])
+    // Background auto-save: survey progress is upserted to client_onboarding_drafts and offered back on reload.
+    const draft = React.useRef<{ answers: any; step: number } | null>(null)
+    const saveT = React.useRef<any>(null)
+    const draftLoaded = React.useRef(false) // never save before the stored draft has been read, so a fresh frame can't overwrite it
+    const sendRestore = React.useCallback(() => {
+        const w = frame.current?.contentWindow
+        if (w && draft.current && surveyOrigin) w.postMessage({ type: "fy-survey-restore", ...draft.current }, surveyOrigin)
+    }, [surveyOrigin])
+    React.useEffect(() => {
+        if (preview || !client?.client_id) return
+        db.from("client_onboarding_drafts").select("answers,step,submitted_at").eq("client_id", client.client_id).maybeSingle()
+            .then(({ data }: any) => { draftLoaded.current = true; if (data && !data.submitted_at && data.answers) { draft.current = { answers: data.answers, step: Number(data.step) || 0 }; sendRestore() } }, () => { draftLoaded.current = true })
+    }, [client?.client_id, preview, db, sendRestore])
     const [wait, setWait] = React.useState(false)
     const [welcomed, setWelcomed] = React.useState(false)
 
     React.useEffect(() => {
         let timer: any
         const onMsg = (e: MessageEvent) => {
+            const fromSurvey = !!surveyOrigin && e.origin === surveyOrigin && e.source === frame.current?.contentWindow
+            if (fromSurvey && e.data?.type === "fy-survey-ready") sendRestore()
+            if (fromSurvey && e.data?.type === "fy-survey-state" && !preview && client?.client_id && draftLoaded.current) {
+                clearTimeout(saveT.current)
+                const row = { client_id: client.client_id, project_id: project?.id || null, client_email: (client.email || "").toLowerCase(), answers: e.data.answers || {}, step: Number(e.data.step) || 0, updated_at: new Date().toISOString() }
+                saveT.current = setTimeout(() => { db.from("client_onboarding_drafts").upsert(row, { onConflict: "client_id" }).then(() => {}, () => {}) }, 800)
+            }
             if (e.data?.type === "fy-survey-complete") {
+                if (!preview && client?.client_id) db.from("client_onboarding_drafts").update({ submitted_at: new Date().toISOString() }).eq("client_id", client.client_id).then(() => {}, () => {})
                 setWait(true)
                 let tries = 0
                 timer = setInterval(async () => {
@@ -334,8 +359,8 @@ function Survey({ p, client, project, onDone, db, preview }: any) {
             if (e.data?.type === "fy-survey-height" && Number(e.data.h) > 300) setSurveyH(Math.ceil(Number(e.data.h)))
         }
         window.addEventListener("message", onMsg)
-        return () => { window.removeEventListener("message", onMsg); clearInterval(timer) }
-    }, [client, db, onDone])
+        return () => { window.removeEventListener("message", onMsg); clearInterval(timer); clearTimeout(saveT.current) }
+    }, [client, project, db, onDone, preview, surveyOrigin, sendRestore])
 
     if (!welcomed)
         return (
@@ -354,7 +379,7 @@ function Survey({ p, client, project, onDone, db, preview }: any) {
             </div>
         )
     return (
-        <div className="wrap" style={{ width: "100%", maxWidth: 1024, overflow: "hidden" }}>
+        <div className="wrap" style={{ width: "100%", maxWidth: 1024, minHeight: 0 }}>
             <h1 style={{ fontSize: "clamp(34px,6vw,60px)", margin: "0 0 6px" }}>{project?.title || "Your project"}</h1>
             <div className="mono" style={{ opacity: 0.85 }}>{project?.address ? `${project.address} | ` : ""}Client: {client?.name || p.nameOverride || ""}</div>
             <div style={{ borderBottom: "1px solid #222226", margin: "16px 0" }} />
@@ -362,7 +387,9 @@ function Survey({ p, client, project, onDone, db, preview }: any) {
             <p style={{ opacity: 0.7, maxWidth: 620, lineHeight: 1.7, margin: 0 }}>A short Design Intent Survey. Your answers shape Phase 1 and unlock your project suite.</p>
             {wait && <div className="card mono" style={{ margin: "18px 0" }}>Filing your survey and preparing your suite…</div>}
             {src ? (
-                <iframe title="Design Intent Survey" src={src} scrolling="no" style={{ display: "block", width: "100%", height: surveyH, border: "1px solid #222226", marginTop: 20, background: "#0B0B0C", overflow: "hidden" }} allow="clipboard-write" />
+                <div style={{ marginTop: 20, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", touchAction: "pan-y", maxHeight: "85vh", minHeight: 0 }}>
+                    <iframe ref={frame} title="Design Intent Survey" src={src} onLoad={sendRestore} style={{ display: "block", boxSizing: "border-box", width: "100%", height: surveyH ? `min(${surveyH}px, 85vh)` : "85vh", border: "1px solid #222226", background: "#0B0B0C" }} allow="clipboard-write" />
+                </div>
             ) : <div className="card mono" style={{ marginTop: 20 }}>Add the survey URL in the component's sidebar.</div>}
         </div>
     )

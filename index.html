@@ -26,7 +26,7 @@ h3{font-size:26px;font-style:italic;border-bottom:1px solid var(--line);padding-
 .rate button{border:1px solid var(--line);background:var(--card);color:var(--mute);border-radius:999px;padding:6px 14px;font:inherit;font-size:13px;cursor:pointer}
 .rate button.on{background:var(--acc);border-color:var(--acc);color:var(--on)}.rate button.on.m{background:var(--acc2);border-color:var(--acc2)}.rate button.on.x{background:var(--mute);border-color:var(--mute)}
 input[type=text],textarea{width:100%;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:12px;padding:12px 14px;font:inherit}textarea{min-height:90px}
-.nav{display:flex;justify-content:space-between;gap:12px;margin-top:40px}.btn{border:0;border-radius:999px;padding:14px 28px;font:500 15px Jost,sans-serif;letter-spacing:.06em;cursor:pointer;background:var(--acc);color:var(--on);text-decoration:none;display:inline-block;transition:all .3s}.btn:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.18)}.btn:disabled{opacity:.6}.btn.g{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
+.nav{display:flex;justify-content:space-between;gap:12px;margin-top:40px;position:sticky;bottom:0;background:#000000;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom));z-index:10}.btn{border:0;border-radius:999px;padding:14px 28px;font:500 15px Jost,sans-serif;letter-spacing:.06em;cursor:pointer;background:var(--acc);color:var(--on);text-decoration:none;display:inline-block;transition:all .3s}.btn:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.18)}.btn:disabled{opacity:.6}.btn.g{background:transparent;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line)}
 .foot{margin-top:56px;text-align:center;font-size:12px;letter-spacing:.3em;text-transform:uppercase;color:var(--mute)}
 .strip{display:flex;height:34px;border-radius:4px;overflow:hidden;margin:10px 0 18px}.strip i{display:block}
 .row{display:flex;align-items:center;gap:10px;font-size:14px;margin:6px 0}.row b{width:190px;font-weight:400}.row u{flex:1;height:10px;background:var(--line);border-radius:6px;overflow:hidden}.row u i{display:block;height:100%;background:var(--acc)}.row em{width:44px;font-style:normal;color:var(--mute);text-align:right}
@@ -128,6 +128,20 @@ useEffect(()=>{window.scrollTo(0,0)},[st,done]);
 const [,tick]=useState(0);
 useEffect(()=>{const SBURL="https://afejhlfwymwagstyfnse.supabase.co",SBKEY="sb_publishable_DxxomxoBSa8QkC6pBzYf5A_O86rctbV";fetch(SBURL+"/rest/v1/survey_card_images?select=option,url",{headers:{apikey:SBKEY,Authorization:"Bearer "+SBKEY}}).then(r=>r.ok?r.json():[]).then(rows=>{if(Array.isArray(rows)&&rows.length){rows.forEach(x=>{if(x.option&&x.url)IMG[x.option]=x.url;if(x.option==="Moonlit minimal")IMG["Minimal"]=x.url});tick(n=>n+1)}}).catch(()=>{})},[]);
 const put=(k,v)=>setA(p=>({...p,[k]:v}));
+/* Draft bridge (no visible UI): the portal stores progress in Supabase (client_onboarding_drafts); localStorage is a same-device fallback. */
+useEffect(()=>{const EMBED=window.parent!==window,KEY="fy-survey-draft:"+(CLIENT_ID||"anon")+":"+(PROJECT_ID||"");let restored=false;
+const apply=d=>{if(restored||!d||typeof d!=="object")return;restored=true;window.__fyDraftReady=true;if(d.answers&&typeof d.answers==="object")setA(p=>({...p,...d.answers}));const n=Number(d.step);if(Number.isInteger(n)&&n>=-1&&n<S.length)setSt(n)};
+const ok=o=>{try{const h=new URL(o).hostname;return /(^|\.)felemaye\.com$|\.framer\.(app|website|ai)$|(^|\.)framer\.com$|(^|\.)framercanvas\.com$/.test(h)}catch(e){return false}};
+const on=e=>{if(e.source!==window.parent||!ok(e.origin))return;if(e.data&&e.data.type==="fy-survey-restore")apply(e.data)};
+window.addEventListener("message",on);
+if(EMBED){try{window.parent.postMessage({type:"fy-survey-ready"},"*")}catch(e){}}
+const t=setTimeout(()=>{if(!IS_TEST){try{const s=localStorage.getItem(KEY);if(s)apply(JSON.parse(s))}catch(e){}}window.__fyDraftReady=true;tick(n=>n+1)},EMBED?1500:0);
+return()=>{window.removeEventListener("message",on);clearTimeout(t)}},[]);
+useEffect(()=>{if(done||!window.__fyDraftReady)return;const KEY="fy-survey-draft:"+(CLIENT_ID||"anon")+":"+(PROJECT_ID||"");
+if(!IS_TEST){try{localStorage.setItem(KEY,JSON.stringify({answers:A,step:st,at:Date.now()}))}catch(e){}}
+if(window.parent!==window){try{window.parent.postMessage({type:"fy-survey-state",answers:A,step:st},"*");window.parent.postMessage({type:"fy-survey-height",h:document.documentElement.scrollHeight},"*")}catch(e){}}},[A,st,done]);
+useEffect(()=>{if(!done)return;try{localStorage.removeItem("fy-survey-draft:"+(CLIENT_ID||"anon")+":"+(PROJECT_ID||""))}catch(e){}},[done]);
+
 const toggle=(id,v,max)=>setA(p=>{let a=[...(p[id]||[])];const i=a.indexOf(v);if(i>-1)a.splice(i,1);else{if(max===1)a=[];if(a.length>=max)a.shift();a.push(v)}return{...p,[id]:a}});
 const rate=(o,v)=>setA(p=>{const r={...(p.wish||{})};if(r[o]===v)delete r[o];else r[o]=v;return{...p,wish:r}});
 function payload(){const voice=A.voice||"household",weight=CONFIG.weights[voice]??0.5,zs=shares(A),ws={};Z.forEach(z=>{ws[z]=+(zs[z]*weight).toFixed(4)});
