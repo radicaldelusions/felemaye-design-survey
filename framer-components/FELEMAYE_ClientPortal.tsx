@@ -773,22 +773,153 @@ function Roadmap({ p }: any) {
     )
 }
 
+/* ───────────── Visual previews: thumbnails for every file and board image ─────────────
+   Storage files resolve through short-lived signed URLs (the bucket stays private). PDFs render their first page
+   with pdf.js. Google Drive references use Drive's thumbnail service, which works whenever the viewer's Google
+   account can see the file; otherwise the card falls back to a typographic tile, never a grey box. */
+const IMG_RX = /\.(png|jpe?g|gif|webp|avif|heic|bmp|svg)(\?|$)/i
+const PDF_RX = /\.pdf(\?|$)/i
+const extOf = (n: string) => ((n || "").match(/\.([a-z0-9]{2,5})(\?|$)/i)?.[1] || "").toUpperCase()
+const driveId = (u: string) => (u.match(/drive\.google\.com\/(?:file\/d\/|open\?id=|uc\?(?:export=\w+&)?id=)([\w-]{20,})/) || [])[1] || ""
+const SIGNED = new Map<string, Promise<string>>()
+function signed(db: any, path: string): Promise<string> {
+    if (!SIGNED.has(path)) SIGNED.set(path, db.storage.from("project-files").createSignedUrl(path, 3600).then(({ data }: any) => data?.signedUrl || "").catch(() => ""))
+    return SIGNED.get(path)!
+}
+/** Resolve any stored reference ("sb:<path>", "ext:<url>", a bare storage path or an https URL) to a viewable URL. */
+function useResolved(db: any, ref: string) {
+    const [url, setUrl] = React.useState(() => (/^https?:/.test(ref) ? ref : ref.startsWith("ext:") ? ref.slice(4) : ""))
+    React.useEffect(() => {
+        if (/^https?:/.test(ref)) setUrl(ref)
+        else if (ref.startsWith("ext:")) setUrl(ref.slice(4))
+        else if (ref) { let live = true; signed(db, ref.replace(/^sb:/, "")).then((u) => live && setUrl(u)); return () => { live = false } }
+    }, [db, ref])
+    return url
+}
+let PDFJS: Promise<any> | null = null
+const PDF_THUMBS = new Map<string, Promise<string>>()
+function pdfThumb(url: string, key: string): Promise<string> {
+    if (!PDF_THUMBS.has(key)) {
+        PDFJS = PDFJS || import(/* @vite-ignore */ "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs").then((m: any) => { m.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs"; return m })
+        PDF_THUMBS.set(key, PDFJS.then(async (pdfjs: any) => {
+            const doc = await pdfjs.getDocument({ url }).promise
+            const page = await doc.getPage(1)
+            const v0 = page.getViewport({ scale: 1 }), scale = 900 / v0.width, v = page.getViewport({ scale })
+            const c = document.createElement("canvas"); c.width = v.width; c.height = v.height
+            await page.render({ canvasContext: c.getContext("2d"), viewport: v }).promise
+            return c.toDataURL("image/jpeg", 0.82)
+        }).catch(() => ""))
+    }
+    return PDF_THUMBS.get(key)!
+}
+/** A file's visual: image, PDF first page, Drive thumbnail, or a typographic tile. */
+function Thumb({ db, path, name, ratio = "4 / 3" }: { db: any; path: string; name: string; ratio?: string }) {
+    const isExt = String(path).startsWith("ext:")
+    const url = useResolved(db, path)
+    const did = isExt ? driveId(url) : ""
+    const kind = did ? "drive" : IMG_RX.test(name) || IMG_RX.test(url) ? "img" : PDF_RX.test(name) || PDF_RX.test(url) ? "pdf" : "file"
+    const sources = did ? [`https://drive.google.com/thumbnail?id=${did}&sz=w1000`, `https://lh3.googleusercontent.com/d/${did}=w1000`] : kind === "img" && url ? [url] : []
+    const [i, setI] = React.useState(0)
+    const [pdf, setPdf] = React.useState("")
+    const [ok, setOk] = React.useState(false)
+    React.useEffect(() => { setI(0); setOk(false) }, [url])
+    React.useEffect(() => { if (kind === "pdf" && url) { let live = true; pdfThumb(url, path).then((d) => live && setPdf(d)); return () => { live = false } } }, [kind, url, path])
+    const src = kind === "pdf" ? pdf : sources[i]
+    const box: React.CSSProperties = { position: "relative", aspectRatio: ratio, overflow: "hidden", background: "color-mix(in srgb,var(--ink) 5%,var(--surface))" }
+    return (
+        <div style={box}>
+            {src && <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={() => setOk(true)} onError={() => { setOk(false); setI((n) => n + 1) }}
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: kind === "pdf" ? "contain" : "cover", background: kind === "pdf" ? "#fff" : undefined, opacity: ok ? 1 : 0, transition: "opacity .5s ease" }} />}
+            {!ok && (
+                <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", textAlign: "center", padding: 12 }}>
+                    <div>
+                        <div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: "clamp(26px,3vw,36px)", lineHeight: 1, opacity: 0.8 }}>{kind === "drive" ? "Drive" : extOf(name) || "File"}</div>
+                        <div className="mono" style={{ marginTop: 8, opacity: 0.5 }}>{src || (kind === "pdf" && url && !pdf) ? "Loading preview" : "Preview on open"}</div>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+/** Grid / List switch, remembered per viewer. */
+function useViewMode(key: string): ["grid" | "list", (v: "grid" | "list") => void] {
+    const [v, setV] = React.useState<"grid" | "list">("grid")
+    React.useEffect(() => { try { const s = localStorage.getItem("fy-view:" + key); if (s === "list" || s === "grid") setV(s) } catch {} }, [key])
+    return [v, (n) => { setV(n); try { localStorage.setItem("fy-view:" + key, n) } catch {} }]
+}
+function ViewToggle({ value, onChange }: { value: "grid" | "list"; onChange: (v: "grid" | "list") => void }) {
+    const b = (k: "grid" | "list", label: string) => (
+        <button type="button" aria-pressed={value === k} onClick={() => onChange(k)} className="mono"
+            style={{ background: value === k ? "var(--ink)" : "transparent", color: value === k ? "var(--paper)" : "inherit", border: "1px solid var(--ink)", padding: "7px 12px", opacity: 1, minHeight: 34 }}>{label}</button>
+    )
+    return <div role="group" aria-label="View" style={{ display: "inline-flex", gap: 0 }}>{b("grid", "Grid")}{b("list", "List")}</div>
+}
+const GRID_CSS = `.fy-tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:16px;margin-top:16px}
+@media(max-width:520px){.fy-tg{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}}
+.fy-tc{display:block;color:inherit;text-decoration:none;cursor:pointer;border:1px solid color-mix(in srgb,var(--ink) 12%,transparent);background:var(--surface);transition:transform .35s ease,box-shadow .35s ease}
+.fy-tc:hover{transform:translateY(-2px);box-shadow:0 10px 28px rgba(0,0,0,.12)}.fy-tc:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.fy-tc .cap{padding:10px 12px 12px}.fy-tc .nm{font-size:13px;line-height:1.4;overflow-wrap:anywhere}
+.fy-mas{column-count:3;column-gap:14px}@media(max-width:860px){.fy-mas{column-count:2}}@media(max-width:420px){.fy-mas{column-count:1}}
+.fy-mas figure{margin:0 0 14px;break-inside:avoid;position:relative}.fy-mas img{width:100%;display:block;transition:opacity .5s ease}
+.fy-mas a{display:block;color:inherit}.fy-mas a:hover img{opacity:.88}
+.fy-col{display:grid;grid-template-columns:2fr 1fr 1fr;grid-template-rows:1fr 1fr;gap:4px;aspect-ratio:16/9}.fy-col>*:first-child{grid-row:span 2}
+.fy-col img{width:100%;height:100%;object-fit:cover;display:block}@media(max-width:520px){.fy-col{aspect-ratio:4/3}}`
+/** Opens a file the way FileLink does (signed URL or external link) — used by grid cards. */
+async function openFile(db: any, path: string) {
+    if (path.startsWith("ext:")) { window.open(path.slice(4), "_blank", "noopener"); return }
+    const u = await signed(db, path)
+    if (u) window.open(u, "_blank", "noopener")
+}
+function FileCard({ db, f, meta, label }: { db: any; f: any; meta?: string; label: string }) {
+    return (
+        <a className="fy-tc" role="link" tabIndex={0} onClick={() => openFile(db, f.path)} onKeyDown={(e) => { if (e.key === "Enter") openFile(db, f.path) }}>
+            <Thumb db={db} path={f.path} name={f.name || ""} />
+            <div className="cap"><div className="nm">{f.name}</div>{meta && <div style={{ opacity: 0.45, fontSize: 11, marginTop: 4 }}>{meta}</div>}<div className="mono" style={{ marginTop: 8 }}>{label} ↗</div></div>
+        </a>
+    )
+}
+function StoredImg({ db, src, alt }: { db: any; src: string; alt: string }) {
+    const url = useResolved(db, src)
+    const [ok, setOk] = React.useState(false)
+    return url ? <img src={url} alt={alt} loading="lazy" referrerPolicy="no-referrer" onLoad={() => setOk(true)} style={{ opacity: ok ? 1 : 0 }} /> : null
+}
+/** Accepts a bare slug, a channel URL, or a profile URL; returns the channel slug and its page. */
+function arenaChannel(input: string | undefined) {
+    const raw = (input || "").trim()
+    if (!raw) return { slug: LINKS.arenaSlug, url: LINKS.arenaUrl }
+    try {
+        const u = new URL(raw)
+        const parts = u.pathname.split("/").filter(Boolean)
+        if (/are\.na$/.test(u.hostname) && parts.length >= 2) return { slug: parts[parts.length - 1], url: raw }
+        return { slug: LINKS.arenaSlug, url: LINKS.arenaUrl } // a profile link has no channel: use the project channel
+    } catch { return { slug: raw.replace(/^\/+|\/+$/g, ""), url: raw === LINKS.arenaSlug ? LINKS.arenaUrl : `https://www.are.na/channel/${raw}` } }
+}
+
 function Boards({ p, project, db }: any) {
     const boards = useRows(db, "moodboards", project?.id, "seq")
     const items = useRows(db, "moodboard_items", project?.id, "seq")
     const [arena, setArena] = React.useState<any[]>([])
+    const [arenaState, setArenaState] = React.useState<"loading" | "ok" | "error">("loading")
     const [url, setUrl] = React.useState("")
     const [msg, setMsg] = React.useState("")
-    const slug = p.arenaChannel || LINKS.arenaSlug
+    const [studio, setStudio] = React.useState(false)
+    const [snapBusy, setSnapBusy] = React.useState(false)
+    const snapInput = React.useRef<HTMLInputElement>(null)
+    const ch = arenaChannel(p.arenaChannel)
     const matter = p.matterUrl || LINKS.matter
     const isSnap = (i: any) => i.added_by === "studio" && i.url && /^material board/i.test(i.caption || "")
     const snap = [...items.rows].reverse().find(isSnap)
+    React.useEffect(() => { db.rpc("is_studio").then(({ data }: any) => setStudio(!!data), () => {}) }, [db])
     React.useEffect(() => {
-        fetch(`https://api.are.na/v2/channels/${slug}/contents?per=36`).then((r) => r.json()).then((j) => setArena(j.contents || [])).catch(() => {})
-    }, [slug])
+        setArenaState("loading")
+        fetch(`https://api.are.na/v2/channels/${encodeURIComponent(ch.slug)}/contents?per=100&direction=desc`)
+            .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+            .then((j) => { setArena((j.contents || []).filter((b: any) => b.image?.display?.url)); setArenaState("ok") })
+            .catch(() => setArenaState("error"))
+    }, [ch.slug])
     React.useEffect(() => {
-        const ch = db.channel("mb-" + project?.id).on("postgres_changes", { event: "*", schema: "public", table: "moodboard_items", filter: `project_id=eq.${project?.id}` }, () => items.reload()).subscribe()
-        return () => { db.removeChannel(ch) }
+        const c = db.channel("mb-" + project?.id).on("postgres_changes", { event: "*", schema: "public", table: "moodboard_items", filter: `project_id=eq.${project?.id}` }, () => items.reload()).subscribe()
+        return () => { db.removeChannel(c) }
     }, [db, project?.id])
     async function add() {
         if (!url.trim() || !project) return
@@ -799,37 +930,67 @@ function Boards({ p, project, db }: any) {
         const { error } = await db.from("moodboard_items").insert({ board_id: boardId, project_id: project.id, kind: "image", url: url.trim(), added_by: "client", added_by_email: u?.user?.email })
         if (error) setMsg("Couldn't add that: " + error.message); else { setMsg("Added to your board."); setUrl(""); items.reload() }
     }
+    // Studio only: post a fresh picture of the Mattoboard (Mattoboard cannot be framed by other sites).
+    async function postSnapshot(e: React.ChangeEvent<HTMLInputElement>) {
+        const f = e.target.files?.[0]
+        e.target.value = ""
+        if (!f || !project) return
+        const boardId = boards.rows[0]?.id
+        if (!boardId) { setMsg("Create the project's mood board first."); return }
+        setSnapBusy(true); setMsg("")
+        const path = `${project.id}/studio/material-board_${Date.now()}.${(f.name.split(".").pop() || "png").toLowerCase()}`
+        const up = await db.storage.from("project-files").upload(path, f, { contentType: f.type || "image/png" })
+        if (up.error) { setMsg("Snapshot upload failed: " + up.error.message); setSnapBusy(false); return }
+        const { data: u } = await db.auth.getUser()
+        const { error } = await db.from("moodboard_items").insert({ board_id: boardId, project_id: project.id, kind: "image", url: "sb:" + path, caption: "Material board snapshot", added_by: "studio", added_by_email: u?.user?.email })
+        setMsg(error ? "Couldn't post the snapshot: " + error.message : "Snapshot posted. The client sees it now.")
+        setSnapBusy(false); items.reload()
+    }
+    const own = items.rows.filter((i: any) => i.url && !isSnap(i))
+    const collage = [...own.map((i: any) => ({ k: "i" + i.id, src: i.url })), ...arena.map((b: any) => ({ k: "a" + b.id, src: b.image.display.url }))].slice(0, 5)
     return (
         <div className="grid">
+            <style>{GRID_CSS}</style>
             <div className="card">
                 <div className="mono">Material &amp; mood board</div>
                 <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, maxWidth: 620 }}>Our working material direction for the courtyard: stone, masonry, metals and color. It grows as we move from the Phase 1 curation board into the Phase 2 lookbook.</p>
-                {/* Mattoboard refuses to load inside other sites, so the portal shows the studio's latest snapshot of the board and opens the live board in one click. */}
-                <a href={matter} target="_blank" rel="noopener" style={{ display: "block", position: "relative", color: "inherit", textDecoration: "none", border: ".5px solid var(--ink)", background: "color-mix(in srgb,var(--ink) 6%,transparent)", minHeight: snap ? 0 : 220 }}>
-                    {snap ? <img src={snap.url} alt="Latest material board snapshot" style={{ width: "100%", display: "block" }} />
-                        : <div style={{ minHeight: 220, display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}><div><div className="mono">Material board</div><div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 26, marginTop: 8 }}>Open the live board</div></div></div>}
+                {/* Mattoboard refuses to load inside other sites (frame-ancestors 'none'), so the portal shows the studio's latest
+                    snapshot, or a live collage of the project's images until one is posted. Tapping opens the interactive 3D board. */}
+                <a href={matter} target="_blank" rel="noopener" style={{ display: "block", position: "relative", color: "inherit", textDecoration: "none", border: "1px solid color-mix(in srgb,var(--ink) 14%,transparent)", overflow: "hidden" }}>
+                    {snap ? <div className="fy-mas" style={{ columnCount: 1 }}><StoredImg db={db} src={snap.url} alt="Latest material board snapshot" /></div>
+                        : collage.length ? (
+                            <div className="fy-col" style={collage.length < 3 ? { gridTemplateColumns: "1fr", gridTemplateRows: "1fr" } : undefined}>{(collage.length < 3 ? collage.slice(0, 1) : collage).map((c) => <div key={c.k} style={{ overflow: "hidden", minHeight: 0 }}><StoredImg db={db} src={c.src} alt="" /></div>)}</div>
+                        ) : <div style={{ minHeight: 220, display: "grid", placeItems: "center", textAlign: "center", padding: 24 }}><div><div className="mono">Material board</div><div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 26, marginTop: 8 }}>Open the live board</div></div></div>}
                     <span className="btn" style={{ position: "absolute", right: 12, bottom: 12, textDecoration: "none" }}>Open live board ↗</span>
                 </a>
                 <p className="mono" style={{ marginTop: 10 }}>{snap ? `Snapshot updated ${new Date(snap.created_at).toLocaleDateString()} · tap the image for the live, interactive board` : "The live board opens in a new tab. A snapshot appears here as the studio updates it."}</p>
+                {studio && (
+                    <div className="row" style={{ marginTop: 12 }}>
+                        <input ref={snapInput} type="file" accept="image/*" onChange={postSnapshot} style={{ position: "absolute", width: 1, height: 1, opacity: 0, pointerEvents: "none" }} />
+                        <button className="btn ghost" disabled={snapBusy} onClick={() => snapInput.current?.click()}>{snapBusy ? "Posting…" : "Studio · post board snapshot"}</button>
+                    </div>
+                )}
             </div>
             <div className="card">
                 <div className="mono">Inspiration · Are.na</div>
-                <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, margin: "6px 0 14px" }}>The studio's running reference channel for your project. <a href={LINKS.arenaUrl} target="_blank" rel="noopener" style={{ color: "inherit" }}>Open on Are.na ↗</a></p>
-                <div style={{ columnCount: 3, columnGap: 14 }} className="fy-masonry">
-                    <style>{`@media(max-width:860px){.fy-masonry{column-count:2!important}}@media(max-width:520px){.fy-masonry{column-count:1!important}}`}</style>
-                    {items.rows.filter((i: any) => i.url && !isSnap(i)).map((i: any) => (
-                        <figure key={i.id} style={{ margin: "0 0 14px", breakInside: "avoid" }}>
-                            <img src={i.url} alt={i.caption || ""} style={{ width: "100%", display: "block" }} loading="lazy" />
+                <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, margin: "6px 0 14px" }}>The studio's running reference channel for your project. <a href={ch.url} target="_blank" rel="noopener" style={{ color: "inherit" }}>Open on Are.na ↗</a></p>
+                <div className="fy-mas">
+                    {own.map((i: any) => (
+                        <figure key={i.id}>
+                            <a href={/^https?:/.test(i.url) ? i.url : undefined} target="_blank" rel="noopener"><StoredImg db={db} src={i.url} alt={i.caption || ""} /></a>
                             {i.caption && <figcaption className="mono" style={{ marginTop: 6 }}>{i.caption}</figcaption>}
                         </figure>
                     ))}
-                    {arena.filter((b: any) => b.image?.display?.url).map((b: any) => (
-                        <figure key={"a" + b.id} style={{ margin: "0 0 14px", breakInside: "avoid" }}>
-                            <img src={b.image.display.url} alt={b.title || ""} style={{ width: "100%", display: "block" }} loading="lazy" />
+                    {arena.map((b: any) => (
+                        <figure key={"a" + b.id}>
+                            <a href={`https://www.are.na/block/${b.id}`} target="_blank" rel="noopener" title={b.title || ""}>
+                                <img src={b.image.display.url} alt={b.title || ""} loading="lazy" style={{ aspectRatio: b.image.original?.width && b.image.original?.height ? `${b.image.original.width} / ${b.image.original.height}` : undefined }} />
+                            </a>
                         </figure>
                     ))}
+                    {arenaState === "loading" && !own.length && [0, 1, 2, 3, 4, 5].map((n) => <figure key={"s" + n}><div style={{ aspectRatio: n % 2 ? "3 / 4" : "4 / 3", background: "color-mix(in srgb,var(--ink) 6%,transparent)" }} /></figure>)}
                 </div>
-                {!items.rows.length && !arena.length && <p className="mono">Reference images will appear here.</p>}
+                {!own.length && arenaState !== "loading" && !arena.length && <p className="mono">Reference images will appear here.</p>}
             </div>
             <div className="card">
                 <div className="mono">Add your own inspiration</div>
@@ -904,8 +1065,10 @@ function Files({ p, project, db, client }: any) {
     const rest = files.rows.filter((f: any) => !String(f.path).startsWith("ext:"))
     const drive = p.driveFolderUrl || LINKS.drive
     const line = ".5px solid color-mix(in srgb,var(--ink) 25%,transparent)"
+    const [view, setView] = useViewMode("files")
     return (
         <div className="grid">
+            <style>{GRID_CSS}</style>
             <div className="card">
                 <div className="mono">Send us a file</div>
                 <p style={{ fontSize: 14, opacity: 0.7, lineHeight: 1.7, margin: "8px 0 14px" }}>Surveys, photos, permits, inspiration, anything useful. The studio is notified the moment it arrives.</p>
@@ -923,9 +1086,11 @@ function Files({ p, project, db, client }: any) {
             <SurveyCopy db={db} client={client} />
             {ref.length > 0 && (
                 <div className="card">
-                    <div className="mono">Reference library</div>
+                    <div className="row" style={{ justifyContent: "space-between" }}><div className="mono">Reference library</div><ViewToggle value={view} onChange={setView} /></div>
                     <p style={{ fontSize: 14, opacity: 0.7, lineHeight: 1.7, margin: "8px 0 4px" }}>Your inspiration images, gathered from your Drive folder. The studio sorts these into the right phase as the design develops.</p>
-                    {ref.map((f: any) => (
+                    {view === "grid" ? (
+                        <div className="fy-tg">{ref.map((f: any) => <FileCard key={f.id} db={db} f={f} label="Open" />)}</div>
+                    ) : ref.map((f: any) => (
                         <div key={f.id} className="row" style={{ justifyContent: "space-between", padding: "12px 0", borderTop: line }}>
                             <span style={{ fontSize: 14 }}>{f.name}</span>
                             <FileLink db={db} path={f.path} label="Open" />
@@ -934,7 +1099,7 @@ function Files({ p, project, db, client }: any) {
                 </div>
             )}
             <div className="card">
-                <div className="mono">Project archive</div>
+                <div className="row" style={{ justifyContent: "space-between" }}><div className="mono">Project archive</div>{!ref.length && <ViewToggle value={view} onChange={setView} />}</div>
                 <p style={{ fontSize: 14, opacity: 0.7, lineHeight: 1.7, margin: "8px 0 6px" }}>Everything filed for your project, sorted by type. Newest first.</p>
                 {FILE_CATS.map(([k, label, hint]) => {
                     const inCat = rest.filter((f: any) => (f.category || guessCat(f.name || "")) === k).sort((a: any, b: any) => String(b.created_at).localeCompare(String(a.created_at)))
@@ -944,7 +1109,8 @@ function Files({ p, project, db, client }: any) {
                                 <span><span style={{ fontSize: 16 }}>{label}</span><span className="brk" style={{ display: "block", fontSize: 12, opacity: 0.55, marginTop: 2 }}>{hint}</span></span>
                                 <span className="pill" style={{ flex: "0 0 auto" }}>{inCat.length}</span>
                             </summary>
-                            {inCat.map((f: any) => (
+                            {view === "grid" && inCat.length > 0 && <div className="fy-tg" style={{ margin: "0 0 16px" }}>{inCat.map((f: any) => <FileCard key={f.id} db={db} f={f} label="Download" meta={`${f.direction === "studio" || f.direction === "studio_to_client" ? "from the studio" : "from you"} · ${new Date(f.created_at).toLocaleDateString()}`} />)}</div>}
+                            {view === "list" && inCat.map((f: any) => (
                                 <div key={f.id} className="row" style={{ justifyContent: "space-between", padding: "10px 0 10px 12px", borderTop: ".5px dashed color-mix(in srgb,var(--ink) 20%,transparent)" }}>
                                     <span className="brk" style={{ fontSize: 14, flex: "1 1 200px" }}>{f.name} <span style={{ opacity: 0.45, fontSize: 11 }}>· {f.direction === "studio" || f.direction === "studio_to_client" ? "from the studio" : "from you"} · {new Date(f.created_at).toLocaleDateString()}</span></span>
                                     <FileLink db={db} path={f.path} label="Download" />
