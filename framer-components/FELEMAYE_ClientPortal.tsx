@@ -836,12 +836,14 @@ function Thumb({ db, f, ratio = "4 / 3", bump = 0, onDrive }: { db: any; f: any;
     const [pdf, setPdf] = React.useState<string | null>(null) // null = still rendering, "" = could not render
     const [ok, setOk] = React.useState(false)
     React.useEffect(() => { setI(0); setOk(false) }, [url, studioPrev])
+    // A private Drive image that needs a Google sign-in can hang instead of failing; move on after 8 s.
+    React.useEffect(() => { if (!did || ok || i >= sources.length) return; const t = setTimeout(() => setI((n) => n + 1), 8000); return () => clearTimeout(t) }, [did, ok, i, sources.length])
     React.useEffect(() => { if (kind === "pdf" && url) { let live = true; setPdf(null); pdfThumb(url, path).then((d) => live && setPdf(d)); return () => { live = false } } }, [kind, url, path])
     const src = kind === "pdf" ? pdf || "" : sources[i]
     const failed = !ok && (kind === "file" || (kind === "pdf" ? pdf === "" : i >= sources.length))
     return (
         <div style={{ position: "relative", aspectRatio: ratio, overflow: "hidden", background: "color-mix(in srgb,var(--ink) 4%,var(--surface))" }}>
-            {src && <img src={src} alt="" loading="lazy" referrerPolicy="no-referrer" onLoad={() => setOk(true)} onError={() => { setOk(false); setI((n) => n + 1) }}
+            {src && <img key={src} src={src} alt="" loading={did ? "eager" : "lazy"} referrerPolicy="no-referrer" onLoad={() => setOk(true)} onError={() => { setOk(false); setI((n) => n + 1) }}
                 style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: kind === "pdf" ? "contain" : "cover", background: kind === "pdf" ? "#fff" : undefined, opacity: ok ? 1 : 0, transition: "opacity .5s ease" }} />}
             {!ok && (
                 <div className="fy-tcard">
@@ -1037,7 +1039,7 @@ function arenaChannel(input: string | undefined) {
    environment light) from the FELEMAYE renderer, loaded only when this tab opens. Edit the list in the Framer sidebar. */
 type PaletteItem = { name: string; note: string; material: string; tint?: string }
 const PALETTE: PaletteItem[] = [
-    { name: "Patinated Copper", note: "Front gate and hardware · from the copper gate references", material: "brass", tint: "#A8653F" },
+    { name: "Aged Copper", note: "Front gate and hardware · from the copper gate references", material: "brass", tint: "#8A5636" },
     { name: "Lime Plaster over Block", note: "Courtyard walls · from the block and curved-wall references", material: "plaster", tint: "#E4DCCD" },
     { name: "Terracotta Floor Tile", note: "Courtyard floor · from the floor tile references", material: "terracotta" },
 ]
@@ -1251,7 +1253,7 @@ function guessCat(name: string, direction?: string) {
     if (/\.(pdf|docx?)$/.test(n)) return "agreements"
     return "other"
 }
-const archiveCat = (f: any) => (ARCHIVE_KEYS.includes(f.category) ? f.category : LEGACY_CAT[f.category] || guessCat(f.name || "", f.direction))
+const archiveCat = (f: any) => (MODEL_RX.test(f.name || "") ? "other" : ARCHIVE_KEYS.includes(f.category) ? f.category : LEGACY_CAT[f.category] || guessCat(f.name || "", f.direction))
 // Folders that matter in each phase open by default; the rest stay folded.
 function phaseFolders(title: string): string[] {
     const t = (title || "").toLowerCase()
