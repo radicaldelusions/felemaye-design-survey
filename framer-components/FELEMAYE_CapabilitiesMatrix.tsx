@@ -83,15 +83,29 @@ export default function CapabilitiesMatrix(props: Props) {
                 </div>
                 {!narrow && [["Sheet", "C-001"], ["Scale", "NTS"], ["By", "F.Y."]].map(([k, v]) => <div key={k} style={{ padding: "10px 18px", borderLeft: "1px solid #222226" }}><div style={{ font: `9px ${MONO}`, letterSpacing: ".24em", textTransform: "uppercase", color: "#A39B8B" }}>{k}</div><div style={{ fontWeight: 600, fontSize: 14, marginTop: 2 }}>{v}</div></div>)}
             </div>
-            {/* collapsed left-hand vertical menu: the original nine practice verticals, each a fast-track inquiry link */}
-            <div style={{ position: "absolute", left: 16, top: 70, zIndex: 3 }}>
+            {/* desktop: collapsed left vertical rail (codes only), expands to the nine titles on hover/focus or tap */}
+            {!narrow && (
+                <nav aria-label="Practice index" onMouseEnter={() => setMenu(true)} onMouseLeave={() => setMenu(false)} onFocus={() => setMenu(true)} onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setMenu(false) }}
+                    style={{ position: "absolute", left: 0, top: 81, bottom: p.toolbarClearance, zIndex: 3, width: menu ? 292 : 56, background: menu ? "rgba(20,20,22,.97)" : "rgba(11,11,12,.85)", borderRight: "1px solid #222226", transition: "width .28s cubic-bezier(.2,.7,.2,1), background .28s", overflow: "hidden", display: "flex", flexDirection: "column", boxShadow: menu ? "12px 0 30px rgba(0,0,0,.45)" : "none" }}>
+                    <button aria-expanded={menu} onClick={() => setMenu(!menu)} style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 14, minHeight: 48, padding: "0 19px", color: GOLD, font: `10px ${MONO}`, letterSpacing: ".2em", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: "1px solid #222226" }}><span aria-hidden="true" style={{ fontSize: 15, width: 18 }}>{menu ? "×" : "☰"}</span>Practice index</button>
+                    {NODES.map((n) => (
+                        <a key={n.id} href={href(n)} onMouseEnter={() => setHot(n.id)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(n.id)} onBlur={() => setHot(null)} aria-label={n.label}
+                            style={{ display: "flex", alignItems: "center", gap: 14, minHeight: 44, padding: "0 16px", color: act === n.id ? GOLD : "#EDE6D8", textDecoration: "none", whiteSpace: "nowrap", borderLeft: `2px solid ${act === n.id ? n.color : "transparent"}` }}>
+                            <span style={{ font: `700 11px ${MONO}`, color: n.color, width: 22, letterSpacing: ".06em" }}>{n.code}</span>
+                            <span style={{ font: `500 13px Inter,system-ui,sans-serif`, opacity: menu ? 1 : 0, transition: "opacity .2s" }}>{n.label}</span>
+                        </a>
+                    ))}
+                </nav>
+            )}
+            {/* phones: collapsed menu button with the original nine practice verticals, each a fast-track inquiry link */}
+            {narrow && <div style={{ position: "absolute", left: 16, top: 70, zIndex: 3 }}>
                 <button aria-expanded={menu} aria-controls="cm-menu" onClick={() => setMenu(!menu)} style={{ display: "flex", alignItems: "center", gap: 10, background: "#141416", color: GOLD, border: "1px solid #222226", font: `10px ${MONO}`, letterSpacing: ".2em", textTransform: "uppercase", padding: "0 14px", minHeight: 44, cursor: "pointer" }}><span aria-hidden="true" style={{ fontSize: 15 }}>{menu ? "×" : "☰"}</span>Practice index</button>
                 {menu && (
                     <nav id="cm-menu" aria-label="Practice index" style={{ marginTop: 6, background: "#141416", border: "1px solid #222226", width: "min(300px, calc(100vw - 48px))", boxShadow: "0 12px 30px rgba(0,0,0,.5)" }}>
                         {NODES.map((n, i) => <a key={n.id} href={href(n)} onMouseEnter={() => setHot(n.id)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(n.id)} onBlur={() => setHot(null)} style={{ display: "flex", gap: 12, alignItems: "center", padding: "0 14px", minHeight: 44, borderTop: i ? "1px solid #222226" : 0, color: act === n.id ? GOLD : "#EDE6D8", textDecoration: "none", font: `500 13px Inter,system-ui,sans-serif` }}><span style={{ font: `10px ${MONO}`, color: n.color, width: 22 }}>{n.code}</span>{n.label}</a>)}
                     </nav>
                 )}
-            </div>
+            </div>}
             <svg viewBox={`0 0 ${VW} ${VH}`} width="100%" role="group" aria-label="How the practice's disciplines connect" style={{ display: "block", height: "auto", transform: "translateZ(0)", willChange: "transform", backfaceVisibility: "hidden", WebkitBackfaceVisibility: "hidden" }}>
                 <defs><pattern id="cm-g" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#1d1d1d" strokeWidth="1" /></pattern></defs>
                 <rect width={VW} height={VH} fill="url(#cm-g)" />
@@ -132,15 +146,15 @@ export default function CapabilitiesMatrix(props: Props) {
                                 </defs>
                                 <text fontFamily="Inter,system-ui,sans-serif" fontWeight="700" fontSize={narrow ? 6.2 : 7.2} letterSpacing=".5" fill={n.ink} opacity=".8"><textPath href={`#cm-in-${n.id}`} startOffset="50%" textAnchor="middle">{n.label.toUpperCase()}</textPath></text>
                                 <text fontFamily={MONO} fontSize="8" letterSpacing="1" fill="#666666"><textPath href={`#cm-out-${n.id}`} startOffset="50%" textAnchor="middle">{neighbours(n.id)}</textPath></text>
-                                <text x={P.x} y={P.y - 2} textAnchor="middle" dominantBaseline="central" fontFamily="Inter,system-ui,sans-serif" fontWeight="700" fontSize={narrow ? 26 : 32} fill={n.ink}>{n.code}</text>
-                                <text x={P.x} y={P.y + R * 0.56} textAnchor="middle" dominantBaseline="central" fontFamily={MONO} fontSize={narrow ? 9.5 : 12} letterSpacing=".6" fontWeight="600" fill={n.ink} opacity=".9">{n.short}</text>
+                                <text x={P.x} y={P.y + (narrow ? 29 : 36) * 0.364} textAnchor="middle" fontFamily="Inter,system-ui,sans-serif" fontWeight="800" fontSize={narrow ? 29 : 36} letterSpacing=".02em" fill={n.ink}>{n.code}</text>
+                                <text x={P.x} y={P.y + R * 0.6 + (narrow ? 10.5 : 13) * 0.36} textAnchor="middle" fontFamily={MONO} fontSize={narrow ? 10.5 : 13} letterSpacing=".6" fontWeight="700" fill={n.ink}>{n.short}</text>
                                 </g>
                         </a>
                     )
                 })}
             </svg>
             {/* detail card: always lower-left of the diagram */}
-            <div aria-live="polite" style={{ position: "absolute", left: 24, bottom: p.toolbarClearance + 24, width: "min(340px, calc(100% - 48px))", background: "#141416", border: `1px solid ${node ? node.color : "#222"}`, padding: "14px 16px", opacity: node ? 1 : 0, transform: `translate3d(0,${node ? 0 : 8}px,0)`, willChange: "transform, opacity", backfaceVisibility: "hidden", transition: "opacity .2s,transform .2s", pointerEvents: node ? "auto" : "none", boxShadow: "0 12px 30px rgba(0,0,0,.5)" }}>
+            <div aria-live="polite" style={{ position: "absolute", left: narrow ? 24 : 80, bottom: p.toolbarClearance + 24, width: "min(340px, calc(100% - 48px))", background: "#141416", border: `1px solid ${node ? node.color : "#222"}`, padding: "14px 16px", opacity: node ? 1 : 0, transform: `translate3d(0,${node ? 0 : 8}px,0)`, willChange: "transform, opacity", backfaceVisibility: "hidden", transition: "opacity .2s,transform .2s", pointerEvents: node ? "auto" : "none", boxShadow: "0 12px 30px rgba(0,0,0,.5)" }}>
                 {node && <>
                     <div style={{ font: `10px ${MONO}`, letterSpacing: ".22em", textTransform: "uppercase", color: node.color }}>{node.label}</div>
                     <p style={{ margin: "6px 0 10px", fontSize: 14, lineHeight: 1.55 }}>{node.blurb}</p>

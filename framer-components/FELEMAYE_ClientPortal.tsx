@@ -143,6 +143,12 @@ export default function ClientPortal(p: Props) {
         const { data: cls, error: ce } = await db.from("clients").select(CLIENT_COLS).ilike("email", em)
         const cl = (cls || [])[0]
         if (ce) { setLoadErr("We couldn't open your suite (" + ce.message + "). Please try again."); return setPhase("gate") }
+        // Master key: the studio principal's work email (or any studio address without its own client record)
+        // lands on the omni-client list — every portal, no survey — instead of being signed out.
+        if (em === MASTER_EMAIL || !cl) {
+            const { data: isStudioM } = await db.rpc("is_studio")
+            if (isStudioM) { setLoadErr(""); return setPhase("audit") }
+        }
         if (!cl) { setLoadErr("No client record is attached to " + em + "."); await db.auth.signOut(); return setPhase("gate") }
         setLoadErr("")
         setClient(cl)
@@ -180,17 +186,22 @@ export default function ClientPortal(p: Props) {
     .fyp .snd{grid-column:span 2}
     .fyp .gh{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}
     .fyp .navgrid{display:grid;gap:1px;background:color-mix(in srgb,var(--ink) 22%,transparent);border:1px solid color-mix(in srgb,var(--ink) 22%,transparent);margin:0 0 28px}
-    .fyp .navgrid .row2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px}
+    .fyp .navgrid .row2{display:grid;grid-template-columns:minmax(0,1fr);gap:1px}
     .fyp .navgrid .row5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px}
     .fyp .nv{background:var(--paper);color:var(--ink);border:0;border-radius:0;min-height:52px;padding:10px 8px;font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1.35}
     .fyp .nv:hover{background:color-mix(in srgb,var(--accent) 14%,var(--paper))}
     .fyp .nv[aria-selected=true],.fyp .nv[aria-current=page]{background:var(--accent);color:var(--paper)}
     .fyp .nv:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
-    .fyp .actrow{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:13px;align-items:baseline}
-    .fyp .actrow .ts{grid-column:span 3;white-space:nowrap;font:11px ui-monospace,Menlo,monospace;letter-spacing:.04em;opacity:.6}
-    .fyp .actrow .tx{grid-column:span 9;min-width:0;overflow-wrap:anywhere}
+    .fyp .actrow{display:grid;grid-template-columns:136px 64px minmax(0,1fr);column-gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:13px;align-items:baseline}
+    .fyp .actrow .ts{white-space:nowrap;font:11px ui-monospace,Menlo,monospace;letter-spacing:.04em;opacity:.6;font-variant-numeric:tabular-nums}
+    .fyp .actrow .sd{font:600 9px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase}
+    .fyp .actrow .sd[data-s=studio]{color:var(--accent)}.fyp .actrow .sd[data-s=client]{color:var(--sage)}.fyp .actrow .sd[data-s=system]{opacity:.5}
+    .fyp .actrow .tx{min-width:0;overflow-wrap:anywhere}
+    .fyp .actf{display:inline-flex;gap:0;border:1px solid var(--line)}.fyp .actf button{all:unset;cursor:pointer;padding:6px 10px;font:500 9px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase}
+    .fyp .actf button[aria-pressed=true]{background:var(--accent);color:var(--paper)}.fyp .actf button:focus-visible{outline:2px solid var(--accent)}
+    .fyp .phbar{flex:1;height:6px;background:#222226;position:relative;overflow:hidden}.fyp .phbar i{position:absolute;inset:0 auto 0 0;transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
     .fyp .g2{grid-template-columns:1.4fr 1fr}
-    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow .ts{grid-column:span 12}.fyp .actrow .tx{grid-column:span 12}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
+    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow{grid-template-columns:92px minmax(0,1fr)}.fyp .actrow .sd{grid-column:2}.fyp .actrow .tx{grid-column:2}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
     .fyp img,.fyp iframe{max-width:100%}
     .fyp .tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;width:100%;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
     .fyp .tabs::-webkit-scrollbar{display:none}
@@ -231,6 +242,8 @@ export default function ClientPortal(p: Props) {
         </div>
     )
 }
+
+const MASTER_EMAIL = "felema@felemaye.com"
 
 /* ───────────── Gateway ───────────── */
 function Gateway({ p, db, onEntered, loadErr }: { p: Props; db: any; onEntered: () => void; loadErr?: string }) {
@@ -415,7 +428,6 @@ function Dashboard({ p, client, project, db }: any) {
             <nav className="navgrid" aria-label="Project navigation">
                 <div className="row2">
                     <button className="nv" aria-current={tab === "home" ? "page" : undefined} onClick={() => pick("home")}>Home</button>
-                    <button className="nv" aria-current={tab === "meet" ? "page" : undefined} onClick={() => pick("meet")}>Meet</button>
                 </div>
                 <div className="row5" role="tablist" aria-label="Project sections">
                     {menu.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="nv" onClick={() => pick(k)}>{l}</button>)}
@@ -463,7 +475,13 @@ function Home({ p, project, db, go }: any) {
     const studioH = useStudio(db)
     const [taskOpen, setTaskOpen] = React.useState(0)
     React.useEffect(() => { if (project?.id) db.from("client_tasks").select("id", { count: "exact", head: true }).eq("project_id", project.id).eq("status", "action_required").then(({ count }: any) => setTaskOpen(count || 0)) }, [db, project?.id])
-    const totalPh = Math.max(1, ph.rows.filter((r: any) => r.seq <= 4).length || ph.rows.length || 4)
+    const corePh = ph.rows.filter((r: any) => (r.optional === undefined ? r.seq <= 4 : !r.optional))
+    const totalPh = Math.max(1, corePh.length || ph.rows.length || 4)
+    const curPct = current ? Math.max(0, Math.min(100, Number(current.progress_pct) || 0)) : 0
+    const [filled, setFilled] = React.useState(false)
+    React.useEffect(() => { const t = setTimeout(() => setFilled(true), 120); return () => clearTimeout(t) }, [ph.rows.length])
+    const [actSide, setActSide] = React.useState<"all" | "studio" | "client">("all")
+    const sideOf = (a: any) => a.side || (!a.actor || a.actor === "system" ? "system" : /@felemaye\.com$|felemayemaneberhan@gmail\.com/i.test(a.actor) || a.actor === "studio" ? "studio" : "client")
     const approvedN = ph.rows.filter((r: any) => r.status === "approved").length
     const overall = Math.min(100, Math.round(((approvedN + (current ? 1 : 0)) / totalPh) * 100))
     const pending = pendingD + taskOpen + ph.rows.filter((r: any) => r.status === "in_review").length
@@ -495,15 +513,21 @@ function Home({ p, project, db, go }: any) {
             <div className="grid">
                 <div className="card">
                     <div className="row" style={{ justifyContent: "space-between", flexWrap: "nowrap" }}><div className="mono">Progress</div><div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 30, color: "var(--accent)" }}>{overall}% complete</div></div>
-                    <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
-                        {ph.rows.map((r: any) => (
-                            <div key={r.id} title={`Phase ${r.seq} · ${r.title}`} style={{ flex: 1, height: 6, background: r.status === "approved" ? "var(--sage)" : r.status === "locked" ? "#222226" : "var(--accent)" }} />
-                        ))}
+                    <div style={{ display: "flex", gap: 6, marginTop: 14 }} role="img" aria-label={`${overall}% complete${current ? `, phase ${current.seq} ${curPct}% done` : ""}`}>
+                        {ph.rows.map((r: any) => {
+                            const w = r.status === "approved" ? 100 : r === current ? Math.max(curPct, 4) : 0
+                            return (
+                                <div key={r.id} className="phbar" title={`Phase ${r.seq} · ${r.title}`}>
+                                    <i style={{ width: filled ? w + "%" : 0, background: r.status === "approved" ? "var(--sage)" : "var(--accent)" }} />
+                                </div>
+                            )
+                        })}
                     </div>
-                    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>{ph.rows.map((r: any) => <div key={r.id} className="mono" style={{ flex: 1, fontSize: 9, letterSpacing: ".08em" }}>P{r.seq} · {r.status === "approved" ? "Done" : r.status === "locked" ? "Locked" : "Active"}</div>)}</div>
+                    <div style={{ display: "flex", gap: 6, marginTop: 6 }}>{ph.rows.map((r: any) => <div key={r.id} className="mono" style={{ flex: 1, fontSize: 9, letterSpacing: ".08em" }}>P{r.seq} · {r.status === "approved" ? "Done" : r === current ? `${curPct}%` : r.status === "locked" ? "Locked" : "Active"}</div>)}</div>
+                    {current && <div className="mono" style={{ marginTop: 12, opacity: 0.85 }}>Phase {current.seq} · {current.title} — {curPct}% complete</div>}
                     <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7 }}>{current?.summary || "Your first phase opens as soon as your survey is filed."}</p>
                 </div>
-                <ClientTasks project={project} db={db} studio={studioH} />
+                <ClientTasks project={project} db={db} studio={studioH} go={go} />
             </div>
             <div className="grid">
                 <div className="card">
@@ -514,14 +538,23 @@ function Home({ p, project, db, go }: any) {
             </div>
         </div>
         <div className="card">
-            <div className="mono">Recent activity</div>
-            {act.rows.slice(-8).reverse().map((a: any) => {
+            <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
+                <div className="mono">Recent activity · studio &amp; client</div>
+                <div className="actf" role="group" aria-label="Filter activity">
+                    {(["all", "studio", "client"] as const).map((k) => <button key={k} aria-pressed={actSide === k} onClick={() => setActSide(k)}>{k}</button>)}
+                </div>
+            </div>
+            {act.rows.filter((a: any) => actSide === "all" || sideOf(a) === actSide).slice(-10).reverse().map((a: any) => {
                 const d = new Date(a.created_at)
                 const stamp = `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
+                const sd = sideOf(a)
+                const what = String(a.action).replace(/_/g, " ")
+                const detail = a.meta?.title || a.meta?.name || a.meta?.firm || ""
                 return (
                     <div key={a.id} className="actrow">
                         <span className="ts">{stamp}</span>
-                        <span className="tx"><b style={{ fontWeight: 500 }}>{a.actor === "studio" ? "Studio" : a.actor === "client" ? "Client" : a.actor || ""}</b>{a.actor ? " · " : ""}{String(a.action).replace(/_/g, " ")}</span>
+                        <span className="sd" data-s={sd}>{sd}</span>
+                        <span className="tx">{what.charAt(0).toUpperCase() + what.slice(1)}{detail ? <span style={{ opacity: 0.7 }}> · {detail}</span> : null}</span>
                     </div>
                 )
             })}
@@ -1926,9 +1959,11 @@ function AuditList({ db, onOpen }: any) {
 }
 
 const TASK_BADGE: Record<string, [string, string]> = { action_required: ["ACTION REQUIRED", "var(--ochre)"], pending_review: ["PENDING REVIEW", "var(--slate)"], completed: ["COMPLETED", "var(--sage)"] }
-function ClientTasks({ project, db, studio }: any) {
+const TASK_LINKS: [string, string][] = [["", "No link"], ["files", "Files · upload"], ["ledger", "Ledger"], ["boards", "Mood Boards"], ["phases", "Checkpoints · review"], ["ffe", "FF&E · approve"], ["permit", "Permit Path"], ["billing", "Billing · pay"], ["family", "Family Insights"], ["meet", "Schedule a meeting"], ["team", "Directory"]]
+function ClientTasks({ project, db, studio, go }: any) {
     const [rows, setRows] = React.useState<any[]>([])
     const [title, setTitle] = React.useState(""); const [due, setDue] = React.useState(""); const [msg, setMsg] = React.useState("")
+    const [link, setLink] = React.useState("")
     const load = React.useCallback(async () => {
         if (!project?.id) return
         const { data } = await db.from("client_tasks").select("*").eq("project_id", project.id).order("created_at", { ascending: false }); setRows(data || [])
@@ -1936,8 +1971,11 @@ function ClientTasks({ project, db, studio }: any) {
     React.useEffect(() => { load() }, [load])
     const add = async () => {
         if (!title.trim()) return
-        const { error } = await db.from("client_tasks").insert({ project_id: project.id, title: title.trim().slice(0, 140), due_on: due || null, assigned_by: "Studio" })
-        if (error) setMsg("Couldn't add that task."); else { setTitle(""); setDue(""); setMsg(""); load() }
+        const row: any = { project_id: project.id, title: title.trim().slice(0, 140), due_on: due || null, assigned_by: "Studio" }
+        if (link) { row.link_target = link; row.link_label = (TASK_LINKS.find((x) => x[0] === link) || ["", ""])[1] }
+        let { error } = await db.from("client_tasks").insert(row)
+        if (error && link && /link_/.test(error.message || "")) ({ error } = await db.from("client_tasks").insert({ project_id: row.project_id, title: row.title, due_on: row.due_on, assigned_by: row.assigned_by }))
+        if (error) setMsg("Couldn't add that task."); else { setTitle(""); setDue(""); setLink(""); setMsg(""); load() }
     }
     const setSt = async (id: string, st: string) => { await db.from("client_tasks").update({ status: st, updated_at: new Date().toISOString(), completed_at: st === "completed" ? new Date().toISOString() : null }).eq("id", id); load() }
     const submit = async (id: string) => { const { error } = await db.rpc("client_submit_task", { p_id: id }); if (error) setMsg("Couldn't update that."); else load() }
@@ -1954,6 +1992,8 @@ function ClientTasks({ project, db, studio }: any) {
                             <div className="brk" style={{ fontSize: 15, textDecoration: t.status === "completed" ? "line-through" : "none" }}>{t.title}</div>
                             <div className="mono" style={{ marginTop: 4 }}>{t.due_on ? `Due ${new Date(t.due_on + "T12:00:00").toLocaleDateString()}` : "No due date"}{t.assigned_by ? ` · from ${t.assigned_by}` : ""}</div>
                             <div className="row" style={{ gap: 8, marginTop: 8 }}>
+                                {t.link_url && t.status !== "completed" && <a className="btn" style={{ padding: "8px 12px", textDecoration: "none" }} href={t.link_url} target="_blank" rel="noreferrer">{t.link_label || "Open"} ↗</a>}
+                                {!t.link_url && t.link_target && go && t.status !== "completed" && <button className="btn" style={{ padding: "8px 12px" }} onClick={() => go(t.link_target)}>{(t.link_label || "Open").split(" · ")[0]} →</button>}
                                 {!studio && t.status === "action_required" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => submit(t.id)}>Mark done, send for review</button>}
                                 {studio && t.status !== "completed" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => setSt(t.id, "completed")}>Complete</button>}
                                 {studio && t.status !== "action_required" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => setSt(t.id, "action_required")}>Reopen</button>}
@@ -1968,6 +2008,7 @@ function ClientTasks({ project, db, studio }: any) {
                 <div className="row stack-m" style={{ gap: 10, marginTop: 14, borderTop: LINE, paddingTop: 14, alignItems: "flex-end" }}>
                     <div style={{ flex: "1 1 240px" }}><div className="mono">Assign to client</div><input value={title} maxLength={140} onChange={(e) => setTitle(e.target.value)} placeholder="Review Phase 1 Brief" /></div>
                     <div style={{ flex: "0 1 170px" }}><div className="mono">Due</div><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
+                    <div style={{ flex: "0 1 200px" }}><div className="mono">Opens</div><select value={link} onChange={(e) => setLink(e.target.value)} aria-label="Task link">{TASK_LINKS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
                     <button className="btn" onClick={add}>Assign</button>
                 </div>
             )}
@@ -2008,7 +2049,7 @@ function ReceiptsProof({ project, db, studio }: any) {
             {rows.map((r) => (
                 <div key={r.id} className="fy-rc" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 10, padding: "12px 0", borderTop: LINE }}>
                     <div>
-                        <div className="brk" style={{ fontSize: 14 }}>{r.title}{isNew(r) && <span className="pill" style={{ marginLeft: 8, borderColor: "var(--accent)", color: "var(--accent)" }}>NEW</span>}</div>
+                        <div className="brk" style={{ fontSize: 14 }}>{r.title}{isNew(r) && <span className="pill" style={{ marginLeft: 8, borderColor: "var(--accent)", background: "var(--accent)", color: "#0B0B0C", fontWeight: 600 }}>NEW</span>}</div>
                         <div className="mono" style={{ marginTop: 4 }}>{KIND[r.kind] || r.kind} · {new Date(r.created_at).toLocaleDateString()}{r.vendor ? ` · ${r.vendor}` : ""}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>{r.amount != null && <div style={{ fontSize: 14 }}>{usd(r.amount)}</div>}<FileLink db={db} path={r.file_path} label="Open" /></div>
@@ -2034,7 +2075,8 @@ function ReceiptsProof({ project, db, studio }: any) {
 function Directory({ project, db }: any) {
     const d = useRows(db, "project_directory", project?.id, "seq")
     const lnk: React.CSSProperties = { color: "inherit", textUnderlineOffset: 3 }
-    const COLS = "repeat(12,minmax(0,1fr))", SPAN = [2, 2, 2, 3, 2, 1] // grid-cols-12 gap-4: Name 2 · Role 2 · Company 2 (own column) · Email 3 · Phone 2 · Status 1
+    // One invisible column template shared by the header and every row, so the roster lines up without rules.
+    const COLS = "minmax(0,1.25fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1.6fr) minmax(0,1fr) 104px", SPAN = [1, 1, 1, 1, 1, 1]
     return (
         <div className="card">
             <div className="mono">Project directory</div>
@@ -2045,12 +2087,12 @@ function Directory({ project, db }: any) {
             </div>
             {d.rows.map((r: any) => (
                 <div key={r.id} className="fy-dir" style={{ padding: "14px 0", borderTop: LINE, display: "grid", gridTemplateColumns: COLS, gap: 16, alignItems: "start", fontSize: 14 }}>
-                    <div className="brk" data-l="Name" style={{ fontSize: 15, gridColumn: "span 2" }}>{r.full_name}</div>
-                    <div className="brk" data-l="Role" style={{ gridColumn: "span 2", overflowWrap: "anywhere" }}>{r.role}</div>
-                    <div className="brk" data-l="Company" style={{ gridColumn: "span 2", overflowWrap: "anywhere" }}>{r.company || "—"}</div>
-                    <div className="brk" data-l="Email" style={{ gridColumn: "span 3", overflowWrap: "anywhere" }}>{r.email ? <a href={`mailto:${r.email}`} style={lnk}>{r.email}</a> : "—"}</div>
-                    <div className="brk" data-l="Phone" style={{ gridColumn: "span 2", overflowWrap: "anywhere" }}>{r.phone ? <a href={`tel:${String(r.phone).replace(/[^\d+]/g, "")}`} style={lnk}>{r.phone}</a> : "—"}</div>
-                    <div data-l="Status" style={{ gridColumn: "span 1" }}><span className="pill" style={{ borderColor: /pending|tbd/i.test(r.status || "") ? "var(--ochre)" : "var(--sage)", color: /pending|tbd/i.test(r.status || "") ? "var(--ochre)" : "var(--sage)" }}>{r.status || "Active"}</span></div>
+                    <div className="brk" data-l="Name" style={{ fontSize: 15 }}>{r.full_name}</div>
+                    <div className="brk" data-l="Role" style={{ overflowWrap: "anywhere" }}>{r.role}</div>
+                    <div className="brk" data-l="Company" style={{ overflowWrap: "anywhere" }}>{r.company || "—"}</div>
+                    <div className="brk" data-l="Email" style={{ overflowWrap: "anywhere" }}>{r.email ? <a href={`mailto:${r.email}`} style={lnk}>{r.email}</a> : "—"}</div>
+                    <div className="brk" data-l="Phone" style={{ overflowWrap: "anywhere" }}>{r.phone ? <a href={`tel:${String(r.phone).replace(/[^\d+]/g, "")}`} style={lnk}>{r.phone}</a> : "—"}</div>
+                    <div data-l="Status"><span className="pill" style={{ borderColor: /pending|tbd/i.test(r.status || "") ? "var(--ochre)" : "var(--sage)", color: /pending|tbd/i.test(r.status || "") ? "var(--ochre)" : "var(--sage)" }}>{r.status || "Active"}</span></div>
                 </div>
             ))}
             {!d.rows.length && !d.loading && <p style={{ opacity: 0.6, fontSize: 13, borderTop: LINE, paddingTop: 14 }}>Your project team will be listed here as consultants and trades are engaged.</p>}

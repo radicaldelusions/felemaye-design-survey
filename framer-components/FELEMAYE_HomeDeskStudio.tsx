@@ -550,9 +550,12 @@ export default function HomeDeskStudio(props: Props) {
     .dc a:focus-visible .ring{stroke:${GOLD};stroke-width:3}
     .dc a .ring{fill:transparent;stroke:transparent}
     .dc a:hover .ring{stroke:rgba(201,162,75,.55);stroke-width:2;stroke-dasharray:6 5}
-    .dc .tile{box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:inherit;background:rgba(18,18,18,.6);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:14px 10px 12px;min-height:44px;transition:border-color .2s,transform .2s;font:inherit;cursor:pointer;width:100%}
+    /* phone desk: objects float on the desk surface — no panel, border or blur behind them, just a soft cast shadow */
+    .dc .tile{box-sizing:border-box;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-decoration:none;color:inherit;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;border:0;border-radius:0;padding:10px 6px 8px;min-height:44px;transition:transform .25s cubic-bezier(.2,.7,.2,1);font:inherit;cursor:pointer;width:100%;-webkit-tap-highlight-color:transparent;appearance:none}
+    .dc .tile svg{overflow:visible;filter:drop-shadow(0 12px 14px rgba(0,0,0,.5)) drop-shadow(0 2px 3px rgba(0,0,0,.35))}
+    .dc .tile:active{transform:translateY(-2px) scale(.99)}
     .dc .tile .cap{font:italic 400 15px/1.1 'Cormorant Garamond',Georgia,serif;letter-spacing:.04em;color:#EDE6D8;text-align:center}
-    .dc .tile:hover{border-color:#D4A373}
+    .dc .tile:hover{transform:translateY(-3px)}.dc .tile:hover .cap{color:#D4A373}
     .dc .tile:focus-visible{outline:2px solid ${GOLD};outline-offset:2px}
     .dc .mono{font:10px ${MONO};letter-spacing:.2em;text-transform:uppercase;opacity:.7}
     .dc .ipod{transition:transform .25s cubic-bezier(.2,.7,.2,1);transform-box:fill-box;transform-origin:center;cursor:pointer}
