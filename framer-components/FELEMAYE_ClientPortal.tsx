@@ -6,6 +6,7 @@
 // and the session is a Supabase magic-link session. Every write goes through security-definer RPCs that check ownership.
 import * as React from "react"
 import { addPropertyControls, ControlType } from "framer"
+import { createPortal } from "react-dom"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
 
 type Props = {
@@ -423,7 +424,10 @@ function Dashboard({ p, client, project, db }: any) {
                     <div className="mono">{project?.title || "Your project"}{project?.address ? ` · ${project.address}` : ""}</div>
                     <h1 style={{ fontSize: "clamp(34px,6vw,60px)", marginTop: 8 }}>Welcome, {first || p.nameOverride || "friend"}.</h1>
                 </div>
-                <button className="btn ghost" onClick={() => db.auth.signOut()}>Sign out</button>
+                <div className="row" style={{ gap: 10 }}>
+                    <NotificationBell db={db} project={project} go={pick} />
+                    <button className="btn ghost" onClick={() => db.auth.signOut()}>Sign out</button>
+                </div>
             </div>
             <nav className="navgrid" aria-label="Project navigation">
                 <div className="row2">
@@ -434,8 +438,8 @@ function Dashboard({ p, client, project, db }: any) {
                 </div>
             </nav>
             {tab === "home" && <Home p={p} project={project} db={db} go={pick} />}
-            {tab === "phases" && <Phases project={project} db={db} />}
-            {tab === "roadmap" && <Roadmap p={p} />}
+            {tab === "phases" && <div className="grid"><Presentations project={project} db={db} /><Phases project={project} db={db} /></div>}
+            {tab === "roadmap" && <div className="grid"><CadenceTimeline project={project} db={db} /><Roadmap p={p} /></div>}
             {tab === "boards" && <Boards p={p} project={project} db={db} />}
             {tab === "files" && <Files p={p} project={project} db={db} client={client} />}
             {tab === "team" && <Directory project={project} db={db} />}
@@ -530,11 +534,7 @@ function Home({ p, project, db, go }: any) {
                 <ClientTasks project={project} db={db} studio={studioH} go={go} />
             </div>
             <div className="grid">
-                <div className="card">
-                    <div className="mono">Schedule</div>
-                    <p style={{ fontSize: 14, opacity: 0.75, lineHeight: 1.6 }}>Request time with the studio. We confirm to your calendar.</p>
-                    <Meet project={project} db={db} compact />
-                </div>
+                <ScheduleHub p={p} project={project} db={db} go={go} />
             </div>
         </div>
         <div className="card">
@@ -2099,6 +2099,434 @@ function Directory({ project, db }: any) {
             <style>{`@media(max-width:860px){.fy-dir-h{display:none!important}.fy-dir{grid-template-columns:1fr 1fr!important}.fy-dir>div{grid-column:auto!important}.fy-dir>div[data-l]::before{content:attr(data-l);display:block;font:10px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;opacity:.55;margin-bottom:3px}}@media(max-width:480px){.fy-dir{grid-template-columns:1fr!important}}@media(min-width:861px){.fy-dir [data-l="Status"] .pill{white-space:normal;padding:4px 6px;font-size:9px}}`}</style>
         </div>
     )
+}
+
+
+/* ═════════════ Cadence & experience (2026-10-22b) ═════════════
+   One rhythm across the suite: live milestone reviews every 2–3 weeks with a 3-part agenda,
+   a studio update every Friday, presentations with option decisions, notifications, and a
+   dedicated client booking link with clear scope boundaries. Needs 20261022b SQL; every
+   block hides itself quietly when its table isn't there yet. */
+const CAD_CSS = `
+.fyp .cad-wk{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:18px;padding:16px 0;border-top:1px solid var(--line);align-items:start}
+.fyp .cad-wk[data-now=true]{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%);margin:0 -12px;padding:16px 12px}
+.fyp .cad-wk .n{font:400 30px/1 'Cormorant Garamond',Georgia,serif;color:var(--accent)}
+.fyp .cad-wk .n small{display:block;font:10px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:var(--ink);opacity:.55;margin-top:6px;text-transform:uppercase}
+.fyp .cad-tag{display:inline-flex;align-items:center;gap:6px;font:600 9px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;padding:4px 8px;border:1px solid var(--line);white-space:nowrap}
+.fyp .cad-tag[data-k=live]{border-color:var(--accent);color:var(--accent)}.fyp .cad-tag[data-k=async]{color:var(--slate);border-color:var(--slate)}
+.fyp .cad-tag[data-k=done]{color:var(--sage);border-color:var(--sage)}
+.fyp .cad-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.fyp .bell{position:relative}.fyp .bell b{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#0B0B0C;font:700 10px/18px ui-monospace,Menlo,monospace;text-align:center;padding:0 4px}
+.fyp .ntf{position:absolute;right:0;top:calc(100% + 8px);width:min(380px,calc(100vw - 28px));z-index:20;background:#121214;border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.6);max-height:70vh;overflow:auto}
+.fyp .ntf button.it{all:unset;box-sizing:border-box;display:grid;grid-template-columns:8px minmax(0,1fr);gap:12px;width:100%;padding:14px 16px;border-top:1px solid var(--line);cursor:pointer}
+.fyp .ntf button.it:hover,.fyp .ntf button.it:focus-visible{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.fyp .cad a:not(.btn),.fyp .ovl a:not(.btn){color:inherit}
+.fyp .ovl{position:fixed;inset:0;z-index:60;background:rgba(6,6,7,.92);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);display:flex;flex-direction:column}
+.fyp .ovl .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px clamp(14px,3vw,28px);border-bottom:1px solid var(--line)}
+.fyp .ovl .bar .btn{white-space:nowrap;flex:none}
+.fyp .ovl .body{flex:1;overflow:auto;padding:clamp(16px,4vw,48px)}
+.fyp .ag-part{display:grid;grid-template-columns:110px minmax(0,1fr);gap:20px;padding:22px 0;border-top:1px solid var(--line)}
+.fyp .ag-part .m{font:400 34px/1 'Cormorant Garamond',Georgia,serif;color:var(--accent)}
+.fyp .slide{position:relative;flex:1;display:grid;place-items:center;min-height:0}
+.fyp .slide img{max-width:100%;max-height:calc(100vh - 220px);object-fit:contain;box-shadow:0 30px 80px rgba(0,0,0,.55)}
+.fyp .opt{border:1px solid var(--line);padding:20px;display:grid;gap:10px;align-content:start}
+.fyp .opt[data-on=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.fyp .opt ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6;opacity:.85}
+@media(max-width:700px){.fyp .cad-wk{grid-template-columns:52px minmax(0,1fr)}.fyp .cad-wk>:last-child{grid-column:2}.fyp .ag-part{grid-template-columns:1fr;gap:8px}.fyp .cad-wk .n{font-size:24px}}
+@media(prefers-reduced-motion:no-preference){.fyp .ovl{animation:fyFade .22s ease}@keyframes fyFade{from{opacity:0}to{opacity:1}}}`
+
+/** Overlays render on document.body: a backdrop-filtered card would otherwise trap position:fixed. */
+function Overlay({ children }: any) {
+    if (typeof document === "undefined") return null
+    return createPortal(<div className="fyp" style={{ minHeight: 0, background: "transparent" }}><style>{CAD_CSS}</style>{children}</div>, document.body)
+}
+const AGENDA_PARTS = [
+    { key: "context", title: "Context & retrospective", minutes: 10, items: ["What the studio completed since our last session", "How this milestone answers your goals for the courtyard"] },
+    { key: "present", title: "Visual presentation & deliverables", minutes: 25, items: ["Curated presentation, never raw model files", "Decision points shown side by side: Option A vs Option B, with cost, code and aesthetic trade-offs"] },
+    { key: "approve", title: "Formal approval & next steps", minutes: 10, items: ["Your sign-off in the portal before the next phase begins", "Confirm the date of the next milestone review"] },
+]
+const wkStart = (kick: string, n: number) => { const d = new Date(kick + "T12:00:00"); d.setDate(d.getDate() + (n - 1) * 7); return d }
+const fmtD = (d: Date, o: any = { month: "short", day: "numeric" }) => d.toLocaleDateString("en-US", o)
+const curWeek = (kick?: string) => { if (!kick) return 0; const ms = Date.now() - new Date(kick + "T00:00:00").getTime(); return ms < 0 ? 0 : Math.floor(ms / (7 * 864e5)) + 1 }
+
+function useCadence(db: any, pid?: string) {
+    const [s, setS] = React.useState<any>({ cfg: null, weeks: [], updates: [], agendas: [], events: [], pres: [], decisions: [], ready: false })
+    const load = React.useCallback(async () => {
+        if (!pid) return
+        const q = (t: string, f: (x: any) => any) => f(db.from(t).select("*").eq("project_id", pid)).then((r: any) => r.data || [], () => [])
+        const [cfg, weeks, updates, agendas, events, pres, decisions] = await Promise.all([
+            db.from("project_cadence").select("*").eq("project_id", pid).maybeSingle().then((r: any) => r.data, () => null),
+            q("project_weeks", (x) => x.order("week_no")),
+            q("async_updates", (x) => x.order("published_at", { ascending: false })),
+            q("meeting_agendas", (x) => x.order("created_at", { ascending: false })),
+            q("calendar_events", (x) => x.order("starts_at")),
+            q("presentations", (x) => x.order("published_at", { ascending: false })),
+            q("presentation_decisions", (x) => x.order("created_at", { ascending: false })),
+        ])
+        setS({ cfg, weeks, updates, agendas, events, pres, decisions, ready: true })
+    }, [db, pid])
+    React.useEffect(() => { load() }, [load])
+    return { ...s, reload: load }
+}
+
+function calLinks(e: any) {
+    const s = new Date(e.starts_at), en = new Date(e.ends_at || s.getTime() + 45 * 60e3)
+    const g = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(e.title)}&dates=${icsDate(s)}/${icsDate(en)}&details=${encodeURIComponent((e.notes || "") + (e.video_url ? "\nJoin: " + e.video_url : ""))}&location=${encodeURIComponent(e.location || e.video_url || "")}`
+    const ics = () => {
+        const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//FELEMAYE//Portal//EN", "BEGIN:VEVENT", `UID:${e.id}@felemaye.com`, `DTSTAMP:${icsDate(new Date())}`, `DTSTART:${icsDate(s)}`, `DTEND:${icsDate(en)}`, `SUMMARY:${e.title}`, `LOCATION:${e.location || e.video_url || ""}`, `DESCRIPTION:${(e.notes || "").replace(/\n/g, "\\n")}`, "BEGIN:VALARM", "TRIGGER:-PT1H", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "END:VALARM", "END:VEVENT", "END:VCALENDAR"].join("\r\n")
+        const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "text/calendar" })); a.download = "felemaye-session.ics"; a.click()
+    }
+    return { g, ics }
+}
+
+/* ── Notification bell (header) ── */
+function NotificationBell({ db, project, go }: any) {
+    const [rows, setRows] = React.useState<any[]>([])
+    const [open, setOpen] = React.useState(false)
+    const ref = React.useRef<HTMLDivElement>(null)
+    const load = React.useCallback(() => {
+        if (!project?.id) return
+        db.from("portal_notifications").select("*").eq("project_id", project.id).eq("audience", "client").order("created_at", { ascending: false }).limit(25).then((r: any) => setRows(r.data || []), () => {})
+    }, [db, project?.id])
+    React.useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t) }, [load])
+    React.useEffect(() => {
+        if (!open) return
+        const off = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
+        const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false)
+        document.addEventListener("mousedown", off); document.addEventListener("keydown", esc)
+        return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc) }
+    }, [open])
+    const unread = rows.filter((r) => !r.read_at).length
+    const toggle = () => {
+        const n = !open; setOpen(n)
+        if (n && unread) db.rpc("mark_notifications_read", { p_project: project.id }).then(() => setTimeout(load, 4000), () => {})
+    }
+    const ago = (t: string) => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : fmtD(new Date(t)) }
+    return (
+        <div ref={ref} style={{ position: "relative" }} className="cad">
+            <style>{CAD_CSS}</style>
+            <button className="btn ghost bell" aria-haspopup="true" aria-expanded={open} aria-label={`Notifications${unread ? `, ${unread} new` : ""}`} onClick={toggle}>
+                Updates{unread > 0 && <b>{unread}</b>}
+            </button>
+            {open && (
+                <div className="ntf" role="dialog" aria-label="Notifications">
+                    <div className="mono" style={{ padding: "14px 16px" }}>Studio updates</div>
+                    {rows.map((r) => (
+                        <button key={r.id} className="it" onClick={() => { setOpen(false); if (r.link_target) go(r.link_target) }}>
+                            <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, background: r.read_at ? "transparent" : "var(--accent)", border: "1px solid var(--accent)" }} />
+                            <span style={{ minWidth: 0 }}>
+                                <span style={{ display: "block", fontSize: 14, lineHeight: 1.4 }} className="brk">{r.title}</span>
+                                {r.body && <span style={{ display: "block", fontSize: 12, opacity: 0.65, marginTop: 3, lineHeight: 1.5 }} className="brk">{r.body}</span>}
+                                <span className="mono" style={{ display: "block", marginTop: 6, fontSize: 9 }}>{ago(r.created_at)}</span>
+                            </span>
+                        </button>
+                    ))}
+                    {!rows.length && <p style={{ padding: "0 16px 16px", fontSize: 13, opacity: 0.6, margin: 0 }}>You're all caught up.</p>}
+                </div>
+            )}
+        </div>
+    )
+}
+
+/* ── Agenda overlay (3-part SOP) ── */
+function AgendaView({ a, ev, week, onClose }: any) {
+    React.useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k) }, [onClose])
+    const parts = (a?.parts?.length ? a.parts : AGENDA_PARTS) as any[]
+    const total = parts.reduce((s, p) => s + (+p.minutes || 0), 0)
+    const when = ev ? new Date(ev.starts_at) : null
+    const cl = ev ? calLinks(ev) : null
+    return (
+        <Overlay><div className="ovl" role="dialog" aria-modal="true" aria-label="Meeting agenda">
+            <div className="bar"><span className="mono">Agenda · {total} minutes</span><button className="btn ghost" onClick={onClose}>Close ✕</button></div>
+            <div className="body"><div style={{ maxWidth: 880, margin: "0 auto" }}>
+                <div className="mono" style={{ color: "var(--accent)", opacity: 1 }}>{week ? `Week ${week.week_no} · ${week.touchpoint_title || week.title}` : "Milestone review"}</div>
+                <h2 style={{ fontSize: "clamp(32px,5vw,52px)", margin: "10px 0 8px" }}>{a?.title || week?.title}</h2>
+                {when && <p style={{ margin: 0, opacity: 0.8 }}>{fmtD(when, { weekday: "long", month: "long", day: "numeric" })} · {when.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} PT{ev.location ? ` · ${ev.location}` : ""}</p>}
+                {cl && <div className="row" style={{ gap: 14, marginTop: 12 }}>
+                    {ev.video_url && <a className="btn" href={ev.video_url} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Join ↗</a>}
+                    <a className="mono" href={cl.g} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "8px 0" }}>Google Calendar ↗</a>
+                    <a className="mono" onClick={cl.ics} style={{ textDecoration: "underline", cursor: "pointer", padding: "8px 0" }}>Apple / Outlook (.ics)</a>
+                </div>}
+                <div style={{ marginTop: 30 }}>
+                    {parts.map((p, i) => (
+                        <div key={p.key || i} className="ag-part">
+                            <div><div className="m">{p.minutes}′</div><div className="mono" style={{ marginTop: 6 }}>Part {i + 1}</div></div>
+                            <div>
+                                <h3 style={{ fontSize: 24, margin: "0 0 8px" }}>{p.title}</h3>
+                                <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8, fontSize: 15, opacity: 0.85 }}>{(p.items || []).map((it: string) => <li key={it}>{it}</li>)}</ul>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+                {(a?.decisions || []).length > 0 && (
+                    <div className="card" style={{ marginTop: 24 }}>
+                        <div className="mono">Decisions we'll make together</div>
+                        {a.decisions.map((d: any, i: number) => <p key={i} style={{ margin: "10px 0 0", fontSize: 15 }}>◆ {d.q}{d.outcome ? <span style={{ color: "var(--sage)" }}> — {d.outcome}</span> : null}</p>)}
+                    </div>
+                )}
+                {week?.approval_required && <p style={{ marginTop: 20, fontSize: 14, borderLeft: "2px solid var(--accent)", paddingLeft: 14 }}><span className="mono" style={{ display: "block", marginBottom: 4 }}>Approval at this milestone</span>{week.approval_required}</p>}
+                {a?.status === "held" && a.summary && (
+                    <div className="card" style={{ marginTop: 24 }}>
+                        <div className="mono">Recap</div>
+                        <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.7, fontSize: 15 }}>{a.summary}</p>
+                        {a.next_meeting_at && <p className="mono" style={{ opacity: 1 }}>Next milestone · {fmtD(new Date(a.next_meeting_at), { weekday: "long", month: "long", day: "numeric" })}</p>}
+                    </div>
+                )}
+            </div></div>
+        </div></Overlay>
+    )
+}
+
+/* ── 4 · Schedule & Meetings (Home) ── */
+function ScheduleHub({ p, project, db, go }: any) {
+    const c = useCadence(db, project?.id)
+    const [agenda, setAgenda] = React.useState<any>(null)
+    const [book, setBook] = React.useState(false)
+    const bookingUrl = project?.permit_progress?.__booking_url || ""
+    const now = Date.now()
+    const nextEv = c.events.find((e: any) => new Date(e.ends_at || e.starts_at).getTime() > now - 3600e3)
+    const week = curWeek(c.cfg?.kickoff_on)
+    const W = c.weeks.find((w: any) => w.week_no === week)
+    const nextLive = c.weeks.find((w: any) => w.week_no >= Math.max(1, week) && w.touchpoint === "live")
+    const latest = c.updates[0]
+    const agendaFor = (ev: any) => c.agendas.find((a: any) => a.event_id === ev?.id) || null
+    const days = nextEv ? Math.ceil((new Date(nextEv.starts_at).getTime() - now) / 864e5) : null
+    const fri = (() => { const d = new Date(); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7)); return d })()
+    if (!c.ready) return <div className="card cad"><div className="mono">4 · Schedule & meetings</div><p style={{ opacity: 0.6, fontSize: 13 }}>Loading your schedule…</p></div>
+    return (
+        <div className="card cad">
+            <style>{CAD_CSS}</style>
+            <div className="row" style={{ justifyContent: "space-between" }}>
+                <div className="mono">4 · Schedule & meetings</div>
+                {week > 0 && c.cfg && <span className="mono" style={{ color: "var(--accent)", opacity: 1 }}>Week {Math.min(week, c.cfg.weeks)} of {c.cfg.weeks}</span>}
+            </div>
+            {nextEv ? (
+                <div style={{ marginTop: 14 }}>
+                    <div className="mono">Next session{days != null && days >= 0 ? ` · ${days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}` : ""}</div>
+                    <h2 style={{ fontSize: 30, margin: "8px 0 4px" }} className="brk">{nextEv.title}</h2>
+                    <p style={{ margin: 0, fontSize: 14, opacity: 0.8 }}>{fmtD(new Date(nextEv.starts_at), { weekday: "long", month: "long", day: "numeric" })} · {new Date(nextEv.starts_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} PT</p>
+                    <div className="row" style={{ gap: 10, marginTop: 14 }}>
+                        <button className="btn" onClick={() => setAgenda({ a: agendaFor(nextEv), ev: nextEv, week: c.weeks.find((w: any) => w.event_id === nextEv.id) || nextLive })}>View agenda</button>
+                        {nextEv.video_url && <a className="btn ghost" href={nextEv.video_url} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Join ↗</a>}
+                        <a className="btn ghost" href={calLinks(nextEv).g} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Add to calendar</a>
+                    </div>
+                </div>
+            ) : nextLive ? (
+                <div style={{ marginTop: 14 }}>
+                    <div className="mono">Next milestone review</div>
+                    <h2 style={{ fontSize: 28, margin: "8px 0 4px" }}>{nextLive.touchpoint_title}</h2>
+                    <p style={{ margin: 0, fontSize: 14, opacity: 0.8 }}>Week {nextLive.week_no} · week of {fmtD(wkStart(c.cfg.kickoff_on, nextLive.week_no), { month: "long", day: "numeric" })}. The studio will send the exact time.</p>
+                    <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setAgenda({ a: null, ev: null, week: nextLive })}>Preview the agenda</button>
+                </div>
+            ) : null}
+
+            <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
+                <div className="row" style={{ justifyContent: "space-between" }}>
+                    <div className="mono">Friday studio update</div>
+                    {!latest || new Date(latest.published_at).getTime() < now - 6 * 864e5 ? <span className="mono" style={{ fontSize: 9 }}>Next · {fmtD(fri, { weekday: "long", month: "short", day: "numeric" })}</span> : null}
+                </div>
+                {latest ? (
+                    <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 16 }} className="brk">{latest.title}</div>
+                        {latest.body && <p style={{ fontSize: 13.5, lineHeight: 1.7, opacity: 0.8, margin: "6px 0 0", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{latest.body}</p>}
+                        <div className="row" style={{ gap: 14, marginTop: 8 }}>
+                            {latest.video_url && <a className="mono" href={latest.video_url} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "6px 0" }}>Watch the update ↗</a>}
+                            {latest.file_path && <FileLink db={db} path={latest.file_path} label="Progress note (PDF)" />}
+                            <a className="mono" onClick={() => go("roadmap")} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>All updates →</a>
+                        </div>
+                    </div>
+                ) : <p style={{ fontSize: 13, opacity: 0.65, margin: "8px 0 0" }}>Your first studio update arrives on {fmtD(fri, { weekday: "long", month: "long", day: "numeric" })}.</p>}
+            </div>
+
+            {W && W.touchpoint !== "live" && <p style={{ fontSize: 13, opacity: 0.7, margin: "16px 0 0", lineHeight: 1.6 }}><span className="mono" style={{ display: "block", marginBottom: 4 }}>This week in the studio</span>{W.title}</p>}
+
+            <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
+                <div className="mono">Book time with Felema</div>
+                <p style={{ fontSize: 13, lineHeight: 1.7, opacity: 0.75, margin: "6px 0 10px" }}>{c.cfg?.booking_note || "Milestone reviews are included in your scope. Additional consultations are billed at the studio's hourly advisory rate."}{c.cfg?.advisory_rate ? ` (${usd(c.cfg.advisory_rate)}/hr)` : ""}</p>
+                {bookingUrl ? (
+                    <>
+                        <div className="row" style={{ gap: 10 }}>
+                            <button className="btn" onClick={() => setBook(!book)} aria-expanded={book}>{book ? "Hide calendar" : "Book a phase review"}</button>
+                            <a className="btn ghost" href={bookingUrl} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Open in a new tab ↗</a>
+                        </div>
+                        {book && <iframe title="Book a phase review" src={bookingUrl + (bookingUrl.includes("?") ? "&" : "?") + "embed=true&hide_gdpr_banner=1"} style={{ width: "100%", height: 680, border: LINE, marginTop: 14, background: "#fff" }} loading="lazy" />}
+                    </>
+                ) : <Meet project={project} db={db} compact />}
+                {bookingUrl && <a className="mono" onClick={() => go("meet")} style={{ display: "inline-block", marginTop: 12, textDecoration: "underline", cursor: "pointer" }}>Prefer to suggest times? Request a meeting →</a>}
+            </div>
+            {agenda && <AgendaView a={agenda.a} ev={agenda.ev} week={agenda.week} onClose={() => setAgenda(null)} />}
+        </div>
+    )
+}
+
+/* ── Roadmap: the 12-week rhythm (sits above the existing gantt) ── */
+function CadenceTimeline({ project, db }: any) {
+    const c = useCadence(db, project?.id)
+    const [agenda, setAgenda] = React.useState<any>(null)
+    const [openUpd, setOpenUpd] = React.useState<string | null>(null)
+    if (!c.ready || !c.cfg || !c.weeks.length) return null
+    const week = curWeek(c.cfg.kickoff_on)
+    const PH = ["", "Pre-Design & Site Feasibility", "Schematic Design", "Design Development", "Construction Documents & Permit Submittal"]
+    let lastPh = 0
+    return (
+        <div className="card cad">
+            <style>{CAD_CSS}</style>
+            <div className="mono">Your 12-week rhythm</div>
+            <h2 style={{ fontSize: "clamp(28px,4vw,40px)", margin: "8px 0 8px" }}>How we'll work together</h2>
+            <p style={{ opacity: 0.75, fontSize: 14, lineHeight: 1.75, maxWidth: 680, margin: "0 0 14px" }}>{c.cfg.cadence_note}</p>
+            <div className="row" style={{ gap: 10, marginBottom: 8 }}>
+                <span className="cad-tag" data-k="live"><span className="cad-dot" />Live review · 45 min</span>
+                <span className="cad-tag" data-k="async"><span className="cad-dot" />Friday update</span>
+            </div>
+            {c.weeks.map((w: any) => {
+                const ev = c.events.find((e: any) => e.id === w.event_id)
+                const ups = c.updates.filter((u: any) => u.week_no === w.week_no)
+                const ag = c.agendas.find((a: any) => a.week_no === w.week_no)
+                const past = week > w.week_no || w.status === "done"
+                const head = w.phase_seq !== lastPh ? (lastPh = w.phase_seq, true) : false
+                return (
+                    <React.Fragment key={w.id}>
+                        {head && <div className="mono" style={{ margin: "24px 0 4px", color: "var(--accent)", opacity: 1 }}>Phase {w.phase_seq} · {PH[w.phase_seq] || ""}</div>}
+                        <div className="cad-wk" data-now={week === w.week_no} style={{ opacity: past ? 0.62 : 1 }}>
+                            <div className="n">{String(w.week_no).padStart(2, "0")}<small>{fmtD(wkStart(c.cfg.kickoff_on, w.week_no))}</small></div>
+                            <div style={{ minWidth: 0 }}>
+                                <div style={{ fontSize: 16 }}>{w.title}{week === w.week_no && <span className="mono" style={{ marginLeft: 10, color: "var(--accent)", opacity: 1 }}>· this week</span>}</div>
+                                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>{w.touchpoint_title}</div>
+                                {w.presentation && <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Presentation · {w.presentation}</div>}
+                                {(w.deliverables || []).length > 0 && <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Deliverables · {w.deliverables.join(" · ")}</div>}
+                                {w.approval_required && <div style={{ fontSize: 13, marginTop: 6, color: "var(--accent)" }}>◆ Your approval: {w.approval_required}</div>}
+                                <div className="row" style={{ gap: 14, marginTop: 6 }}>
+                                    {w.touchpoint === "live" && <a className="mono" onClick={() => setAgenda({ a: ag, ev, week: w })} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>Agenda</a>}
+                                    {ev && <a className="mono" href={calLinks(ev).g} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "6px 0" }}>{fmtD(new Date(ev.starts_at), { weekday: "short", month: "short", day: "numeric" })} · add to calendar ↗</a>}
+                                    {ups.map((u: any) => <a key={u.id} className="mono" onClick={() => setOpenUpd(openUpd === u.id ? null : u.id)} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>{openUpd === u.id ? "Hide update" : "Friday update"}</a>)}
+                                </div>
+                                {ups.filter((u: any) => u.id === openUpd).map((u: any) => (
+                                    <div key={u.id} style={{ marginTop: 8, padding: "12px 14px", borderLeft: "2px solid var(--slate)", background: "color-mix(in srgb,var(--slate) 8%,transparent)" }}>
+                                        <div style={{ fontSize: 15 }}>{u.title}</div>
+                                        {u.body && <p style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.7, opacity: 0.85, margin: "6px 0 0" }}>{u.body}</p>}
+                                        {(u.highlights || []).length > 0 && <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>{u.highlights.map((h: string) => <li key={h}>{h}</li>)}</ul>}
+                                        {u.next_up && <p className="mono" style={{ marginTop: 8 }}>Next · {u.next_up}</p>}
+                                        <div className="row" style={{ gap: 14 }}>{u.video_url && <a className="mono" href={u.video_url} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "6px 0" }}>Watch ↗</a>}{u.file_path && <FileLink db={db} path={u.file_path} label="PDF note" />}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <span className="cad-tag" data-k={past ? "done" : w.touchpoint}><span className="cad-dot" />{past ? "Done" : w.touchpoint === "live" ? "Live" : "Async"}</span>
+                        </div>
+                    </React.Fragment>
+                )
+            })}
+            {agenda && <AgendaView a={agenda.a} ev={agenda.ev} week={agenda.week} onClose={() => setAgenda(null)} />}
+        </div>
+    )
+}
+
+/* ── Design presentations (Checkpoints) ── */
+function SlideImg({ db, s }: any) {
+    const url = useResolved(db, s.url || (s.path ? "sb:" + s.path : ""))
+    return url ? <img src={url} alt={s.caption || "Presentation slide"} /> : <div className="mono">Loading…</div>
+}
+function PresentationViewer({ db, pres, decided, onClose, onDecided }: any) {
+    const slides = (pres.slides || []) as any[]
+    const opts = (pres.options || []) as any[]
+    const [i, setI] = React.useState(0)
+    const [pick, setPick] = React.useState<string>(decided?.option_key || "")
+    const [note, setNote] = React.useState("")
+    const [msg, setMsg] = React.useState("")
+    const steps = slides.length + (opts.length ? 1 : 0) || 1
+    const onOpts = opts.length > 0 && i === slides.length
+    React.useEffect(() => {
+        const k = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); if (e.key === "ArrowRight") setI((x) => Math.min(steps - 1, x + 1)); if (e.key === "ArrowLeft") setI((x) => Math.max(0, x - 1)) }
+        window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k)
+    }, [steps, onClose])
+    async function decide() {
+        if (!pick) return setMsg("Choose an option first.")
+        const { error } = await db.rpc("client_decide_presentation", { p_presentation: pres.id, p_option: pick, p_comment: note || null })
+        if (error) setMsg("Couldn't save your choice. Please try again."); else { setMsg("Thank you. Your choice is with the studio."); onDecided() }
+    }
+    return (
+        <Overlay><div className="ovl" role="dialog" aria-modal="true" aria-label={pres.title}>
+            <div className="bar">
+                <div style={{ minWidth: 0 }}><div className="mono">{pres.subtitle || "Design presentation"}</div><div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 22 }} className="brk">{pres.title}</div></div>
+                <div className="row" style={{ gap: 8, flexWrap: "nowrap" }}>
+                    {pres.deck_url && <a className="btn ghost no-m" href={pres.deck_url} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Full deck ↗</a>}
+                    <button className="btn ghost" onClick={onClose}>Close ✕</button>
+                </div>
+            </div>
+            <div className="body" style={{ display: "flex", flexDirection: "column" }}>
+                {!onOpts && slides[i] && (
+                    <div className="slide"><SlideImg db={db} s={slides[i]} />{slides[i].caption && <p style={{ textAlign: "center", fontSize: 15, opacity: 0.85, maxWidth: 720, margin: "18px auto 0" }}>{slides[i].caption}</p>}</div>
+                )}
+                {!slides.length && !opts.length && pres.deck_url && <iframe title={pres.title} src={pres.deck_url} style={{ flex: 1, width: "100%", border: 0, minHeight: "70vh" }} />}
+                {onOpts && (
+                    <div style={{ maxWidth: 1100, margin: "0 auto", width: "100%" }}>
+                        <div className="mono" style={{ color: "var(--accent)", opacity: 1 }}>Decision</div>
+                        <h2 style={{ fontSize: "clamp(28px,4vw,44px)", margin: "8px 0 20px" }}>{pres.decision_prompt || "Which direction feels right?"}</h2>
+                        <div className="grid" style={{ gridTemplateColumns: `repeat(auto-fit,minmax(260px,1fr))` }}>
+                            {opts.map((o: any) => (
+                                <div key={o.key} className="opt" data-on={pick === o.key}>
+                                    <div className="mono">Option {o.key}</div>
+                                    <h3 style={{ fontSize: 26 }}>{o.title}</h3>
+                                    {o.summary && <p style={{ margin: 0, fontSize: 14, lineHeight: 1.7, opacity: 0.85 }}>{o.summary}</p>}
+                                    {(o.pros || []).length > 0 && <><div className="mono" style={{ color: "var(--sage)", opacity: 1 }}>Strengths</div><ul>{o.pros.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+                                    {(o.cons || []).length > 0 && <><div className="mono" style={{ color: "var(--ochre)", opacity: 1 }}>Trade-offs</div><ul>{o.cons.map((x: string) => <li key={x}>{x}</li>)}</ul></>}
+                                    {(o.cost || o.code) && <div style={{ fontSize: 13, opacity: 0.8, lineHeight: 1.6 }}>{o.cost && <div><span className="mono">Cost · </span>{o.cost}</div>}{o.code && <div><span className="mono">Code · </span>{o.code}</div>}</div>}
+                                    <button className={"btn" + (pick === o.key ? "" : " ghost")} onClick={() => setPick(o.key)} aria-pressed={pick === o.key}>{pick === o.key ? "Selected" : `Choose Option ${o.key}`}</button>
+                                </div>
+                            ))}
+                        </div>
+                        <textarea rows={2} placeholder="Anything you'd like us to know (optional)" value={note} onChange={(e) => setNote(e.target.value)} style={{ marginTop: 18 }} maxLength={1500} />
+                        <div className="row" style={{ marginTop: 14 }}>
+                            <button className="btn" onClick={decide}>{decided ? "Update my choice" : "Send my choice to the studio"}</button>
+                            {decided && <span className="mono">You chose Option {decided.option_key} · {fmtD(new Date(decided.created_at))}</span>}
+                        </div>
+                        {msg && <p role="status" style={{ fontSize: 13, marginTop: 10 }}>{msg}</p>}
+                        <p style={{ fontSize: 12.5, opacity: 0.6, marginTop: 16, lineHeight: 1.6 }}>Your formal phase sign-off happens in Checkpoints once we've reviewed this together.</p>
+                    </div>
+                )}
+            </div>
+            {steps > 1 && (
+                <div className="bar" style={{ borderTop: LINE, borderBottom: 0 }}>
+                    <button className="btn ghost" disabled={i === 0} onClick={() => setI(i - 1)}>← Previous</button>
+                    <span className="mono">{onOpts ? "Decision" : `${i + 1} / ${slides.length}`}</span>
+                    <button className="btn" disabled={i === steps - 1} onClick={() => setI(i + 1)}>{i === slides.length - 1 && opts.length ? "Decide →" : "Next →"}</button>
+                </div>
+            )}
+        </div></Overlay>
+    )
+}
+function Presentations({ project, db }: any) {
+    const c = useCadence(db, project?.id)
+    const [open, setOpen] = React.useState<any>(null)
+    if (!c.ready || !c.pres.length) return null
+    const decisionFor = (id: string) => c.decisions.find((d: any) => d.presentation_id === id)
+    return (
+        <div className="card cad">
+            <style>{CAD_CSS}</style>
+            <div className="mono">Design presentations</div>
+            <h2 style={{ fontSize: 28, margin: "8px 0 4px" }}>Curated for your review</h2>
+            <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, margin: "0 0 10px", maxWidth: 620 }}>Each milestone arrives as a short presentation, with any decision laid out side by side.</p>
+            {c.pres.map((pr: any) => {
+                const d = decisionFor(pr.id)
+                const cover = (pr.slides || [])[0]
+                return (
+                    <div key={pr.id} style={{ display: "grid", gridTemplateColumns: "120px minmax(0,1fr) auto", gap: 16, alignItems: "center", padding: "14px 0", borderTop: LINE }}>
+                        <div style={{ aspectRatio: "4/3", background: "#141416", overflow: "hidden", display: "grid", placeItems: "center" }}>{cover ? <span style={{ width: "100%", height: "100%", display: "block" }}><SlideThumb db={db} s={cover} /></span> : <span className="mono" style={{ fontSize: 9 }}>Deck</span>}</div>
+                        <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 16 }} className="brk">{pr.title}</div>
+                            <div className="mono" style={{ marginTop: 4 }}>{pr.published_at ? fmtD(new Date(pr.published_at)) : ""}{(pr.slides || []).length ? ` · ${pr.slides.length} slides` : ""}{(pr.options || []).length ? ` · ${pr.options.length} options` : ""}</div>
+                            {d ? <div style={{ fontSize: 13, color: "var(--sage)", marginTop: 4 }}>You chose Option {d.option_key}</div> : (pr.options || []).length > 0 ? <div style={{ fontSize: 13, color: "var(--accent)", marginTop: 4 }}>Your choice is requested</div> : null}
+                        </div>
+                        <button className="btn" onClick={() => setOpen(pr)}>View</button>
+                    </div>
+                )
+            })}
+            {open && <PresentationViewer db={db} pres={open} decided={decisionFor(open.id)} onClose={() => setOpen(null)} onDecided={c.reload} />}
+        </div>
+    )
+}
+function SlideThumb({ db, s }: any) {
+    const url = useResolved(db, s.url || (s.path ? "sb:" + s.path : ""))
+    return url ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null
 }
 
 ClientPortal.defaultProps = {

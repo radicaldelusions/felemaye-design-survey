@@ -25,6 +25,8 @@ import VignetteStudioConsole from "./VignetteStudioConsole.tsx"
 // Time Bank & EHR with burn alerts, 50/25/25 waterfall, Zoning/Muni engine + Sheet A-001, sub-consultant RFP matrix,
 // trade-bot job queue and Studio Admin Drive refs (needs 20261022_felemaye_master_ecosystem.sql).
 // Every v9 tab, hook and property control is preserved.
+// V4.1 (2026-10-22b): Cadence tab — 12-week plan, live-review scheduling + 3-part agendas, Friday updates,
+// presentations with A/B decisions, booking boundaries, studio notification inbox (needs 20261022b SQL).
 
 type Props = {
     supabaseUrl: string
@@ -45,6 +47,7 @@ type Props = {
 const ADMIN_TABS = [
     "clients",
     "meetings",
+    "cadence",
     "time",
     "time bank",
     "reimbursables",
@@ -391,6 +394,8 @@ export default function MasterStudioConsole(p: Props) {
                 <Meetings db={db} projectId={focus} />
             ) : tab === "time" ? (
                 <TimeTracker db={db} focus={focus} />
+            ) : tab === "cadence" ? (
+                <CadenceStudio db={db} focus={focus} />
             ) : tab === "time bank" ? (
                 <TimeBank db={db} focus={focus} />
             ) : tab === "zoning" ? (
@@ -5457,4 +5462,436 @@ ${
 .fys .v4-mode{display:inline-flex;border:.5px solid color-mix(in srgb,var(--ink) 40%,transparent)}.fys .v4-mode button{all:unset;cursor:pointer;padding:8px 14px;font:600 10px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase}
 .fys .v4-mode button[aria-pressed=true]{background:var(--ink);color:var(--paper)}.fys .v4-mode button:focus-visible{outline:2px solid var(--accent)}
 @media(max-width:700px){.fys .v4-note-row{grid-template-columns:80px 1fr 48px 36px}}`
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   CADENCE STUDIO (2026-10-22b) — needs 20261022b_felemaye_cadence_experience.sql
+   12-week planner (internal deadlines vs client touchpoints), live-review scheduling
+   with the 3-part agenda, Friday update composer, presentation builder with A/B
+   options, booking boundaries and the studio notification inbox.
+   ════════════════════════════════════════════════════════════════════════════ */
+const SOP_PARTS = [
+    { key: "context", title: "Context & retrospective", minutes: 10, items: ["What the studio completed since our last session", "How this milestone answers your goals for the courtyard"] },
+    { key: "present", title: "Visual presentation & deliverables", minutes: 25, items: ["Curated presentation, never raw model files", "Decision points side by side: Option A vs Option B, with cost, code and aesthetic trade-offs"] },
+    { key: "approve", title: "Formal approval & next steps", minutes: 10, items: ["Sign-off in the portal before the next phase begins", "Confirm the date of the next milestone review"] },
+]
+const addDays = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+const short = (iso: string) => new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+const lines = (t: string) => t.split(/\n/).map((x) => x.trim()).filter(Boolean)
+
+function CadenceStudio({ db, focus }: any) {
+    const { pid, picker } = usePick(db, focus)
+    const [d, setD] = React.useState<any>({ cfg: null, weeks: [], dl: [], agendas: [], updates: [], pres: [], decisions: [], events: [], usage: null, booking: "" })
+    const [view, setView] = React.useState<"plan" | "updates" | "presentations" | "inbox" | "settings">("plan")
+    const [edit, setEdit] = React.useState<any>(null) // { kind: 'agenda'|'update'|'pres'|'schedule', row }
+    const [msg, setMsg] = React.useState("")
+    const load = React.useCallback(async () => {
+        if (!pid) return
+        const q = (t: string, f: (x: any) => any = (x) => x) => f(db.from(t).select("*").eq("project_id", pid)).then((r: any) => r.data || [])
+        const [cfg, weeks, dl, agendas, updates, pres, decisions, events, usage, proj] = await Promise.all([
+            db.from("project_cadence").select("*").eq("project_id", pid).maybeSingle().then((r: any) => { if (r.error) setMsg("Run 20261022b_felemaye_cadence_experience.sql first — " + r.error.message); return r.data }),
+            q("project_weeks", (x) => x.order("week_no")),
+            q("studio_deadlines", (x) => x.order("due_on")),
+            q("meeting_agendas", (x) => x.order("created_at", { ascending: false })),
+            q("async_updates", (x) => x.order("created_at", { ascending: false })),
+            q("presentations", (x) => x.order("created_at", { ascending: false })),
+            q("presentation_decisions", (x) => x.order("created_at", { ascending: false })),
+            q("calendar_events", (x) => x.order("starts_at")),
+            db.from("v_session_usage").select("*").eq("project_id", pid).maybeSingle().then((r: any) => r.data),
+            db.from("projects").select("permit_progress").eq("id", pid).maybeSingle().then((r: any) => r.data),
+        ])
+        setD({ cfg, weeks, dl, agendas, updates, pres, decisions, events, usage, booking: proj?.permit_progress?.__booking_url || "" })
+    }, [db, pid])
+    React.useEffect(() => { load() }, [load])
+
+    const today = new Date().toISOString().slice(0, 10)
+    const kick = d.cfg?.kickoff_on
+    const week = kick ? Math.max(0, Math.floor((Date.parse(today) - Date.parse(kick)) / (7 * 864e5)) + 1) : 0
+    const overdue = d.dl.filter((x: any) => !x.done_at && x.due_on && x.due_on < today)
+    const soon = d.dl.filter((x: any) => !x.done_at && x.due_on && x.due_on >= today && x.due_on <= addDays(today, 3))
+    const evOf = (w: any) => d.events.find((e: any) => e.id === w.event_id)
+    const agOf = (w: any) => d.agendas.find((a: any) => a.week_no === w.week_no)
+
+    async function toggleDl(x: any) { await db.from("studio_deadlines").update({ done_at: x.done_at ? null : new Date().toISOString() }).eq("id", x.id); load() }
+    async function addDl(w: any, title: string) { if (!title.trim()) return; await db.from("studio_deadlines").insert({ project_id: pid, week_no: w.week_no, title: title.trim(), due_on: addDays(kick, (w.week_no - 1) * 7 + 4) }); load() }
+    async function patchWeek(w: any, patch: any) { await db.from("project_weeks").update(patch).eq("id", w.id); load() }
+
+    async function schedule(w: any, when: string, mins: number, video: string, location: string, billable: boolean) {
+        if (!when) return setMsg("Pick a date and time.")
+        const start = new Date(when)
+        const { data: ev, error } = await db.from("calendar_events").insert({
+            project_id: pid, title: w ? (w.touchpoint_title || w.title) : "Advisory consultation", kind: w ? "milestone_review" : "advisory",
+            starts_at: start.toISOString(), ends_at: new Date(start.getTime() + mins * 60e3).toISOString(), video_url: video || null, location: location || null,
+            notes: w?.presentation ? "Presentation: " + w.presentation : null, billable,
+        }).select().single()
+        if (error) return setMsg(error.message)
+        if (w) {
+            await db.from("project_weeks").update({ event_id: ev.id }).eq("id", w.id)
+            const ag = agOf(w)
+            if (ag) await db.from("meeting_agendas").update({ event_id: ev.id }).eq("id", ag.id)
+            else await db.from("meeting_agendas").insert({ project_id: pid, event_id: ev.id, week_no: w.week_no, title: w.title, parts: SOP_PARTS, decisions: w.approval_required ? [{ q: w.approval_required }] : [] })
+        }
+        setMsg("Scheduled — the client is notified and can add it to their calendar.")
+        setEdit(null); load()
+    }
+
+    const usage = d.usage
+    const Tab = (k: typeof view, l: string, n?: number) => <button className={"b" + (view === k ? "" : " g")} onClick={() => setView(k)}>{l}{n ? ` · ${n}` : ""}</button>
+    return (
+        <section className="v4">
+            <div className="r" style={{ justifyContent: "space-between" }}>
+                <div>
+                    <div className="mono">Cadence · meetings · presentations</div>
+                    <h2 className="v4-h">{kick ? `Week ${Math.min(Math.max(week, 0), d.cfg.weeks) || "—"} of ${d.cfg.weeks}` : "Set a kickoff date"}{kick && <small style={{ fontSize: 14, opacity: 0.6, marginLeft: 12 }}>kickoff {short(kick)}</small>}</h2>
+                </div>
+                {picker}
+            </div>
+            {msg && <p className="v4-note">{msg}</p>}
+            {(overdue.length > 0 || soon.length > 0) && (
+                <div className="c v4-panel" style={{ borderColor: overdue.length ? "var(--oxblood)" : "var(--ochre)" }}>
+                    <div className="mono">Internal deadlines</div>
+                    {overdue.map((x: any) => <div key={x.id} className="r" style={{ marginTop: 6 }}><span className="v4-alert" style={{ marginLeft: 0 }}>Overdue {short(x.due_on)}</span><span>{x.title}</span><button className="b g" onClick={() => toggleDl(x)}>Done</button></div>)}
+                    {soon.map((x: any) => <div key={x.id} className="r" style={{ marginTop: 6 }}><span className="v4-chip" style={{ borderColor: "var(--ochre)" }}>Due {short(x.due_on)}</span><span>{x.title}</span><button className="b g" onClick={() => toggleDl(x)}>Done</button></div>)}
+                </div>
+            )}
+            {usage && (
+                <div className="v4-kpis">
+                    <div className="v4-kpi"><span className="mono">Included sessions used</span><b>{usage.included_used} / {usage.included_sessions}</b><Meter value={usage.included_used} max={usage.included_sessions} tone="var(--moss)" label="Included sessions" /></div>
+                    <div className="v4-kpi"><span className="mono">Billable advisory calls</span><b>{usage.advisory_sessions}</b><small>{usage.advisory_rate ? `${money(+usage.advisory_rate)}/h → final reconciliation` : "Set your advisory rate in Settings"}</small></div>
+                    <div className="v4-kpi"><span className="mono">Friday updates posted</span><b>{d.updates.filter((u: any) => u.published_at).length}</b><small>{d.weeks.filter((w: any) => w.touchpoint === "async").length} off-weeks planned</small></div>
+                </div>
+            )}
+            <div className="r" style={{ margin: "6px 0 12px" }}>
+                {Tab("plan", "12-week plan")}{Tab("updates", "Friday updates")}{Tab("presentations", "Presentations", d.pres.length)}{Tab("inbox", "Inbox")}{Tab("settings", "Settings & booking")}
+            </div>
+
+            {view === "plan" && d.weeks.map((w: any) => {
+                const ev = evOf(w), ag = agOf(w), dls = d.dl.filter((x: any) => x.week_no === w.week_no)
+                return (
+                    <div key={w.id} className="c v4-panel" style={{ borderLeft: `3px solid ${week === w.week_no ? "var(--ochre)" : w.touchpoint === "live" ? "var(--oxblood)" : "var(--slate)"}` }}>
+                        <div className="r" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div style={{ minWidth: 0, flex: "1 1 320px" }}>
+                                <span className="tag">W{w.week_no} · {kick ? short(addDays(kick, (w.week_no - 1) * 7)) : ""}</span> <span className="tag">P{w.phase_seq}</span>{" "}
+                                <b>{w.title}</b>{week === w.week_no && <span className="v4-chip" style={{ marginLeft: 8, borderColor: "var(--ochre)" }}>this week</span>}
+                                <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "minmax(0,1fr) minmax(0,1fr)", gap: 16 }}>
+                                    <div>
+                                        <div className="mono">Internal · studio only</div>
+                                        {dls.map((x: any) => (
+                                            <label key={x.id} className="r" style={{ gap: 8, marginTop: 6, alignItems: "flex-start", flexWrap: "nowrap" }}>
+                                                <input type="checkbox" checked={!!x.done_at} onChange={() => toggleDl(x)} style={{ minWidth: 16, marginTop: 3 }} />
+                                                <span style={{ fontSize: 13, textDecoration: x.done_at ? "line-through" : "none", opacity: x.done_at ? 0.55 : 1 }}>{x.title} {x.due_on && <small style={{ opacity: 0.6 }}>· {short(x.due_on)}</small>}</span>
+                                            </label>
+                                        ))}
+                                        <AddLine placeholder="+ internal deadline" onAdd={(t: string) => addDl(w, t)} />
+                                    </div>
+                                    <div>
+                                        <div className="mono">Client touchpoint</div>
+                                        <div style={{ fontSize: 13, marginTop: 6 }}>{w.touchpoint === "live" ? "● " : "○ "}{w.touchpoint_title}</div>
+                                        {w.presentation && <div style={{ fontSize: 12.5, opacity: 0.7, marginTop: 4 }}>Presentation · {w.presentation}</div>}
+                                        {w.approval_required && <div style={{ fontSize: 12.5, marginTop: 4, color: "var(--ochre)" }}>◆ {w.approval_required}</div>}
+                                        {ev && <div style={{ fontSize: 12.5, marginTop: 6 }}>📅 {new Date(ev.starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>}
+                                        {ag && <div style={{ fontSize: 12.5, marginTop: 4 }}>Agenda · <span className="tag">{ag.status}</span></div>}
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="r" style={{ flex: "0 1 auto" }}>
+                                <select value={w.status} onChange={(e) => patchWeek(w, { status: e.target.value })} aria-label="Week status">{["planned", "in_progress", "done", "moved"].map((s) => <option key={s}>{s}</option>)}</select>
+                                {w.touchpoint === "live" && <button className="b g" onClick={() => setEdit({ kind: "schedule", row: w })}>{ev ? "Reschedule" : "Schedule"}</button>}
+                                {w.touchpoint === "live" && <button className="b g" onClick={() => setEdit({ kind: "agenda", row: ag || { project_id: pid, week_no: w.week_no, title: w.title, parts: SOP_PARTS, decisions: w.approval_required ? [{ q: w.approval_required }] : [], status: "draft", event_id: w.event_id } })}>Agenda</button>}
+                                {w.touchpoint === "async" && <button className="b g" onClick={() => setEdit({ kind: "update", row: d.updates.find((u: any) => u.week_no === w.week_no) || { project_id: pid, week_no: w.week_no, title: `Week ${w.week_no} · ${w.title}`, highlights: [] } })}>Friday update</button>}
+                                {w.touchpoint === "live" && <button className="b g" onClick={() => setEdit({ kind: "pres", row: d.pres.find((x: any) => x.week_no === w.week_no) || { project_id: pid, week_no: w.week_no, phase_seq: w.phase_seq, title: w.presentation ? w.title : w.title, subtitle: w.touchpoint_title, slides: [], options: [], decision_prompt: w.approval_required || "" } })}>Presentation</button>}
+                            </div>
+                        </div>
+                    </div>
+                )
+            })}
+
+            {view === "updates" && (
+                <>
+                    <button className="b" onClick={() => setEdit({ kind: "update", row: { project_id: pid, week_no: week || 1, title: `Week ${week || 1} · Studio update`, highlights: [] } })}>+ New Friday update</button>
+                    {d.updates.map((u: any) => (
+                        <div key={u.id} className="c v4-panel">
+                            <div className="r" style={{ justifyContent: "space-between" }}>
+                                <div><span className="tag">W{u.week_no}</span> <b>{u.title}</b> <small style={{ opacity: 0.6 }}>{u.published_at ? "published " + new Date(u.published_at).toLocaleDateString() : "draft"}</small></div>
+                                <button className="b g" onClick={() => setEdit({ kind: "update", row: u })}>Edit</button>
+                            </div>
+                        </div>
+                    ))}
+                </>
+            )}
+
+            {view === "presentations" && (
+                <>
+                    <button className="b" onClick={() => setEdit({ kind: "pres", row: { project_id: pid, title: "", slides: [], options: [], decision_prompt: "" } })}>+ New presentation</button>
+                    {d.pres.map((pr: any) => {
+                        const ds = d.decisions.filter((x: any) => x.presentation_id === pr.id)
+                        return (
+                            <div key={pr.id} className="c v4-panel">
+                                <div className="r" style={{ justifyContent: "space-between" }}>
+                                    <div><span className="tag">{pr.status}</span> <b>{pr.title}</b> <small style={{ opacity: 0.6 }}>{(pr.slides || []).length} slides · {(pr.options || []).length} options</small>
+                                        {ds[0] && <span className="v4-chip" style={{ marginLeft: 8, borderColor: "var(--moss)" }}>Client chose {ds[0].option_key}{ds[0].comment ? ` — “${ds[0].comment}”` : ""}</span>}</div>
+                                    <button className="b g" onClick={() => setEdit({ kind: "pres", row: pr })}>Edit</button>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </>
+            )}
+
+            {view === "inbox" && <StudioInbox db={db} />}
+
+            {view === "settings" && <CadenceSettings db={db} pid={pid} cfg={d.cfg} booking={d.booking} reload={load} setMsg={setMsg} schedule={schedule} />}
+
+            {edit?.kind === "schedule" && <ScheduleForm w={edit.row} onClose={() => setEdit(null)} onSave={schedule} />}
+            {edit?.kind === "agenda" && <AgendaEditor db={db} row={edit.row} onClose={() => { setEdit(null); load() }} />}
+            {edit?.kind === "update" && <UpdateEditor db={db} pid={pid} row={edit.row} onClose={() => { setEdit(null); load() }} />}
+            {edit?.kind === "pres" && <PresentationEditor db={db} pid={pid} row={edit.row} onClose={() => { setEdit(null); load() }} />}
+        </section>
+    )
+}
+
+function AddLine({ placeholder, onAdd }: any) {
+    const [t, setT] = React.useState("")
+    return <input value={t} placeholder={placeholder} onChange={(e) => setT(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { onAdd(t); setT("") } }} style={{ width: "100%", fontSize: 13, marginTop: 6 }} />
+}
+
+function Drawer({ title, onClose, children }: any) {
+    React.useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k) }, [onClose])
+    return (
+        <div role="dialog" aria-modal="true" aria-label={title} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(0,0,0,.55)", display: "flex", justifyContent: "flex-end" }} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+            <div style={{ width: "min(640px,100vw)", height: "100%", overflow: "auto", background: "var(--paper)", color: "var(--ink)", borderLeft: ".5px solid color-mix(in srgb,var(--ink) 25%,transparent)", padding: "22px 22px 60px" }}>
+                <div className="r" style={{ justifyContent: "space-between" }}><div className="v4-h" style={{ margin: 0 }}>{title}</div><button className="b g" onClick={onClose}>Close ✕</button></div>
+                {children}
+            </div>
+        </div>
+    )
+}
+
+function ScheduleForm({ w, onClose, onSave }: any) {
+    const [when, setWhen] = React.useState(""), [mins, setMins] = React.useState(45), [video, setVideo] = React.useState(""), [loc, setLoc] = React.useState(""), [bill, setBill] = React.useState(!w)
+    return (
+        <Drawer title={w ? `Schedule · ${w.touchpoint_title}` : "Schedule an advisory call"} onClose={onClose}>
+            <div className="v4-grid" style={{ gridTemplateColumns: "1fr" }}>
+                <label className="v4-field"><span className="mono">Date & time (your local time)</span><input type="datetime-local" value={when} onChange={(e) => setWhen(e.target.value)} /></label>
+                <label className="v4-field"><span className="mono">Length</span><select value={mins} onChange={(e) => setMins(+e.target.value)}>{[30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}</select></label>
+                <label className="v4-field"><span className="mono">Video link</span><input value={video} onChange={(e) => setVideo(e.target.value)} placeholder="Google Meet / Zoom" /></label>
+                <label className="v4-field"><span className="mono">Location (if in person)</span><input value={loc} onChange={(e) => setLoc(e.target.value)} /></label>
+                <label className="r" style={{ gap: 8 }}><input type="checkbox" checked={bill} onChange={(e) => setBill(e.target.checked)} /> Billable advisory session (outside included milestone reviews)</label>
+            </div>
+            <p className="v4-note">Creates the calendar event, links it to the week and drafts the 3-part agenda. The client gets a notification; send the calendar invite from Google Calendar as usual.</p>
+            <button className="b" onClick={() => onSave(w, when, mins, video, loc, bill)}>Schedule</button>
+        </Drawer>
+    )
+}
+
+function AgendaEditor({ db, row, onClose }: any) {
+    const [a, setA] = React.useState<any>({ ...row, parts: (row.parts?.length ? row.parts : SOP_PARTS).map((p: any) => ({ ...p, text: (p.items || []).join("\n") })), dtext: (row.decisions || []).map((x: any) => x.q).join("\n"), next: row.next_meeting_at ? row.next_meeting_at.slice(0, 16) : "" })
+    const [msg, setMsg] = React.useState("")
+    async function save(status?: string) {
+        const body: any = {
+            project_id: a.project_id, week_no: a.week_no, event_id: a.event_id || null, title: a.title,
+            parts: a.parts.map((p: any) => ({ key: p.key, title: p.title, minutes: +p.minutes || 0, items: lines(p.text) })),
+            decisions: lines(a.dtext).map((q) => ({ q, outcome: (row.decisions || []).find((x: any) => x.q === q)?.outcome || null })),
+            summary: a.summary || null, next_meeting_at: a.next ? new Date(a.next).toISOString() : null,
+        }
+        if (status) { body.status = status; if (status === "shared") body.shared_at = new Date().toISOString() }
+        const r = a.id ? await db.from("meeting_agendas").update(body).eq("id", a.id) : await db.from("meeting_agendas").insert(body)
+        if (r.error) return setMsg(r.error.message)
+        onClose()
+    }
+    const total = a.parts.reduce((s: number, p: any) => s + (+p.minutes || 0), 0)
+    return (
+        <Drawer title={`Agenda · ${total} min`} onClose={onClose}>
+            <label className="v4-field"><span className="mono">Title</span><input value={a.title} onChange={(e) => setA({ ...a, title: e.target.value })} /></label>
+            {a.parts.map((p: any, i: number) => (
+                <div key={i} className="c v4-panel">
+                    <div className="r"><input value={p.title} onChange={(e) => { const ps = [...a.parts]; ps[i] = { ...p, title: e.target.value }; setA({ ...a, parts: ps }) }} style={{ flex: 1 }} aria-label="Part title" />
+                        <input type="number" value={p.minutes} onChange={(e) => { const ps = [...a.parts]; ps[i] = { ...p, minutes: e.target.value }; setA({ ...a, parts: ps }) }} style={{ width: 70 }} aria-label="Minutes" /><span className="mono">min</span></div>
+                    <textarea rows={3} value={p.text} onChange={(e) => { const ps = [...a.parts]; ps[i] = { ...p, text: e.target.value }; setA({ ...a, parts: ps }) }} style={{ width: "100%", marginTop: 8 }} aria-label="Talking points, one per line" />
+                </div>
+            ))}
+            <label className="v4-field" style={{ marginTop: 12 }}><span className="mono">Decisions to make (one per line)</span><textarea rows={2} value={a.dtext} onChange={(e) => setA({ ...a, dtext: e.target.value })} /></label>
+            <div className="r" style={{ marginTop: 14 }}>
+                <button className="b g" onClick={() => save()}>Save draft</button>
+                {(a.status || "draft") === "draft" && <button className="b" onClick={() => save("shared")}>Share with client</button>}
+            </div>
+            <div className="c v4-panel">
+                <div className="mono">After the meeting</div>
+                <textarea rows={5} placeholder="Recap: what we decided, what happens next" value={a.summary || ""} onChange={(e) => setA({ ...a, summary: e.target.value })} style={{ width: "100%", marginTop: 8 }} />
+                <label className="v4-field" style={{ marginTop: 8 }}><span className="mono">Next milestone review</span><input type="datetime-local" value={a.next} onChange={(e) => setA({ ...a, next: e.target.value })} /></label>
+                <button className="b" style={{ marginTop: 10 }} onClick={() => save("held")}>Post recap to client</button>
+            </div>
+            {msg && <p className="v4-note">{msg}</p>}
+        </Drawer>
+    )
+}
+
+function UpdateEditor({ db, pid, row, onClose }: any) {
+    const [u, setU] = React.useState<any>({ ...row, htext: (row.highlights || []).join("\n") })
+    const [file, setFile] = React.useState<File | null>(null)
+    const [msg, setMsg] = React.useState("")
+    async function save(publish: boolean) {
+        let file_path = u.file_path || null
+        if (file) {
+            const path = `${pid}/studio/updates/${Date.now()}_${file.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`
+            const up = await db.storage.from("project-files").upload(path, file)
+            if (up.error) return setMsg(up.error.message)
+            file_path = path
+        }
+        const body: any = { project_id: pid, week_no: +u.week_no || null, title: u.title, body: u.body || null, highlights: lines(u.htext), video_url: u.video_url || null, next_up: u.next_up || null, file_path }
+        if (publish && !u.published_at) body.published_at = new Date().toISOString()
+        const r = u.id ? await db.from("async_updates").update(body).eq("id", u.id) : await db.from("async_updates").insert(body)
+        if (r.error) return setMsg(r.error.message)
+        onClose()
+    }
+    return (
+        <Drawer title="Friday studio update" onClose={onClose}>
+            <p className="v4-note">A 2–3 minute Loom or a short note. Lead with what moved in the studio this week; keep it visual and calm.</p>
+            <div className="v4-grid" style={{ gridTemplateColumns: "90px 1fr" }}>
+                <label className="v4-field"><span className="mono">Week</span><input type="number" value={u.week_no || ""} onChange={(e) => setU({ ...u, week_no: e.target.value })} /></label>
+                <label className="v4-field"><span className="mono">Title</span><input value={u.title} onChange={(e) => setU({ ...u, title: e.target.value })} /></label>
+            </div>
+            <label className="v4-field"><span className="mono">Note</span><textarea rows={6} value={u.body || ""} onChange={(e) => setU({ ...u, body: e.target.value })} placeholder="e.g. Completed the Revit exterior base model, sent a preliminary inquiry to LA County Planning, and started the lookbook for next week's review." /></label>
+            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Highlights (one per line)</span><textarea rows={3} value={u.htext} onChange={(e) => setU({ ...u, htext: e.target.value })} /></label>
+            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Loom / video link</span><input value={u.video_url || ""} onChange={(e) => setU({ ...u, video_url: e.target.value })} /></label>
+            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Next up</span><input value={u.next_up || ""} onChange={(e) => setU({ ...u, next_up: e.target.value })} /></label>
+            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">PDF progress note (optional)</span><input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
+            <div className="r" style={{ marginTop: 14 }}>
+                <button className="b g" onClick={() => save(false)}>Save draft</button>
+                <button className="b" onClick={() => save(true)}>{u.published_at ? "Save" : "Publish to client"}</button>
+            </div>
+            {msg && <p className="v4-note">{msg}</p>}
+        </Drawer>
+    )
+}
+
+function PresentationEditor({ db, pid, row, onClose }: any) {
+    const [p, setP] = React.useState<any>({ ...row, options: (row.options || []).map((o: any) => ({ ...o, prosT: (o.pros || []).join("\n"), consT: (o.cons || []).join("\n") })) })
+    const [busy, setBusy] = React.useState(false), [msg, setMsg] = React.useState("")
+    async function upload(files: FileList | null) {
+        if (!files?.length) return
+        setBusy(true)
+        const add: any[] = []
+        for (const f of Array.from(files)) {
+            if (f.size > 25 * 1024 * 1024) { setMsg(f.name + " is over 25 MB"); continue }
+            const path = `${pid}/studio/presentations/${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`
+            const up = await db.storage.from("project-files").upload(path, f)
+            if (up.error) setMsg(up.error.message); else add.push({ path, caption: "" })
+        }
+        setP((x: any) => ({ ...x, slides: [...(x.slides || []), ...add] })); setBusy(false)
+    }
+    const setSlide = (i: number, patch: any) => setP({ ...p, slides: p.slides.map((s: any, k: number) => (k === i ? { ...s, ...patch } : s)) })
+    const move = (i: number, dir: number) => { const s = [...p.slides]; const j = i + dir; if (j < 0 || j >= s.length) return; [s[i], s[j]] = [s[j], s[i]]; setP({ ...p, slides: s }) }
+    const setOpt = (i: number, patch: any) => setP({ ...p, options: p.options.map((o: any, k: number) => (k === i ? { ...o, ...patch } : o)) })
+    async function save(status?: string) {
+        const body: any = {
+            project_id: pid, phase_seq: p.phase_seq || null, week_no: p.week_no || null, title: p.title, subtitle: p.subtitle || null, deck_url: p.deck_url || null,
+            slides: p.slides, decision_prompt: p.decision_prompt || null,
+            options: p.options.map((o: any) => ({ key: o.key, title: o.title, summary: o.summary || "", pros: lines(o.prosT || ""), cons: lines(o.consT || ""), cost: o.cost || "", code: o.code || "" })),
+        }
+        if (!body.title) return setMsg("Add a title.")
+        if (status) { body.status = status; if (status === "published") body.published_at = new Date().toISOString() }
+        const r = p.id ? await db.from("presentations").update(body).eq("id", p.id) : await db.from("presentations").insert(body)
+        if (r.error) return setMsg(r.error.message)
+        onClose()
+    }
+    return (
+        <Drawer title="Presentation" onClose={onClose}>
+            <p className="v4-note">Curated slides only — renders, elevations, boards. Decisions go in the options below so the client sees A vs B side by side.</p>
+            <label className="v4-field"><span className="mono">Title</span><input value={p.title} onChange={(e) => setP({ ...p, title: e.target.value })} placeholder="Pre-Design · Site context & enclosure options" /></label>
+            <label className="v4-field" style={{ marginTop: 8 }}><span className="mono">Subtitle</span><input value={p.subtitle || ""} onChange={(e) => setP({ ...p, subtitle: e.target.value })} /></label>
+            <label className="v4-field" style={{ marginTop: 8 }}><span className="mono">Full deck link (Framer / PDF, optional)</span><input value={p.deck_url || ""} onChange={(e) => setP({ ...p, deck_url: e.target.value })} /></label>
+            <div className="c v4-panel">
+                <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">Slides · {(p.slides || []).length}</span><label className="b g" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "+ Add images"}<input type="file" accept="image/*" multiple hidden onChange={(e) => upload(e.target.files)} /></label></div>
+                {(p.slides || []).map((s: any, i: number) => (
+                    <div key={s.path || s.url || i} className="r" style={{ marginTop: 8, flexWrap: "nowrap" }}>
+                        <span className="mono" style={{ width: 22 }}>{i + 1}</span>
+                        <input value={s.caption || ""} placeholder="Caption" onChange={(e) => setSlide(i, { caption: e.target.value })} style={{ flex: 1 }} />
+                        <button className="b g" onClick={() => move(i, -1)} aria-label="Move up">↑</button><button className="b g" onClick={() => move(i, 1)} aria-label="Move down">↓</button>
+                        <button className="b g" onClick={() => setP({ ...p, slides: p.slides.filter((_: any, k: number) => k !== i) })} aria-label="Remove slide">✕</button>
+                    </div>
+                ))}
+            </div>
+            <div className="c v4-panel">
+                <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">Decision options</span><button className="b g" onClick={() => setP({ ...p, options: [...p.options, { key: String.fromCharCode(65 + p.options.length), title: "" }] })}>+ Option</button></div>
+                <label className="v4-field" style={{ marginTop: 8 }}><span className="mono">Question for the client</span><input value={p.decision_prompt || ""} onChange={(e) => setP({ ...p, decision_prompt: e.target.value })} placeholder="Which enclosure approach should we develop?" /></label>
+                {p.options.map((o: any, i: number) => (
+                    <div key={i} style={{ marginTop: 12, paddingTop: 12, borderTop: ".5px solid color-mix(in srgb,var(--ink) 15%,transparent)" }}>
+                        <div className="r"><span className="tag">Option {o.key}</span><input value={o.title} placeholder="Title" onChange={(e) => setOpt(i, { title: e.target.value })} style={{ flex: 1 }} /><button className="b g" onClick={() => setP({ ...p, options: p.options.filter((_: any, k: number) => k !== i) })}>✕</button></div>
+                        <textarea rows={2} placeholder="Summary" value={o.summary || ""} onChange={(e) => setOpt(i, { summary: e.target.value })} style={{ width: "100%", marginTop: 6 }} />
+                        <div className="v4-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                            <textarea rows={3} placeholder="Strengths (one per line)" value={o.prosT || ""} onChange={(e) => setOpt(i, { prosT: e.target.value })} />
+                            <textarea rows={3} placeholder="Trade-offs (one per line)" value={o.consT || ""} onChange={(e) => setOpt(i, { consT: e.target.value })} />
+                            <input placeholder="Cost note" value={o.cost || ""} onChange={(e) => setOpt(i, { cost: e.target.value })} />
+                            <input placeholder="Code note" value={o.code || ""} onChange={(e) => setOpt(i, { code: e.target.value })} />
+                        </div>
+                    </div>
+                ))}
+            </div>
+            <div className="r" style={{ marginTop: 14 }}>
+                <button className="b g" onClick={() => save()}>Save draft</button>
+                {p.status !== "published" ? <button className="b" onClick={() => save("published")}>Publish to client</button> : <button className="b g" onClick={() => save("draft")}>Unpublish</button>}
+            </div>
+            {msg && <p className="v4-note">{msg}</p>}
+        </Drawer>
+    )
+}
+
+function CadenceSettings({ db, pid, cfg, booking, reload, setMsg, schedule }: any) {
+    const [c, setC] = React.useState<any>(cfg || { kickoff_on: new Date().toISOString().slice(0, 10), weeks: 12, included_sessions: 5 })
+    const [b, setB] = React.useState(booking || "")
+    const [adv, setAdv] = React.useState(false)
+    React.useEffect(() => { if (cfg) setC(cfg) }, [cfg])
+    React.useEffect(() => { setB(booking || "") }, [booking])
+    async function save() {
+        const { updated_at, ...row } = c
+        const r = await db.from("project_cadence").upsert({ ...row, project_id: pid, advisory_rate: c.advisory_rate === "" ? null : c.advisory_rate })
+        const r2 = await saveProjectSetting(db, pid, "__booking_url", b.trim() || null)
+        setMsg(r.error ? r.error.message : r2.error ? r2.error.message : "Saved.")
+        reload()
+    }
+    const F = (k: string, l: string, type = "text") => <label className="v4-field" key={k}><span className="mono">{l}</span><input type={type} value={c[k] ?? ""} onChange={(e) => setC({ ...c, [k]: e.target.value })} /></label>
+    return (
+        <div className="c v4-panel">
+            <div className="v4-grid">
+                {F("kickoff_on", "Kickoff (Monday of week 1)", "date")}
+                {F("weeks", "Weeks", "number")}
+                {F("included_sessions", "Included live sessions", "number")}
+                {F("advisory_rate", "Advisory rate $/h", "number")}
+            </div>
+            <label className="v4-field"><span className="mono">Dedicated client booking link (not your public discovery link)</span><input value={b} onChange={(e) => setB(e.target.value)} placeholder="Calendly / TidyCal event: Project Lorado — Phase Review / Advisory Touchpoint (45 min)" /></label>
+            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Cadence note shown to the client</span><textarea rows={4} value={c.cadence_note || ""} onChange={(e) => setC({ ...c, cadence_note: e.target.value })} /></label>
+            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Booking boundary note</span><textarea rows={3} value={c.booking_note || ""} onChange={(e) => setC({ ...c, booking_note: e.target.value })} /></label>
+            <div className="r" style={{ marginTop: 14 }}><button className="b" onClick={save}>Save settings</button><button className="b g" onClick={() => setAdv(true)}>Log an advisory call</button></div>
+            {adv && <ScheduleForm w={null} onClose={() => setAdv(false)} onSave={(w: any, ...rest: any[]) => { setAdv(false); (schedule as any)(null, ...rest) }} />}
+        </div>
+    )
+}
+
+function StudioInbox({ db }: any) {
+    const [rows, setRows] = React.useState<any[]>([])
+    const [projects, setProjects] = React.useState<any>({})
+    const load = React.useCallback(async () => {
+        const [n, p] = await Promise.all([
+            db.from("portal_notifications").select("*").eq("audience", "studio").order("created_at", { ascending: false }).limit(60),
+            db.from("projects").select("id,title"),
+        ])
+        setRows(n.data || []); setProjects(Object.fromEntries((p.data || []).map((x: any) => [x.id, x.title])))
+    }, [db])
+    React.useEffect(() => { load() }, [load])
+    async function readAll() { const ids = Array.from(new Set(rows.filter((r) => !r.read_at).map((r) => r.project_id))); for (const id of ids) await db.rpc("mark_notifications_read", { p_project: id }); load() }
+    return (
+        <div className="c v4-panel">
+            <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">From clients · {rows.filter((r) => !r.read_at).length} new</span><button className="b g" onClick={readAll}>Mark all read</button></div>
+            {rows.map((r) => (
+                <div key={r.id} className="v4-note-row" style={{ gridTemplateColumns: "10px 150px minmax(0,1fr) 140px", opacity: r.read_at ? 0.6 : 1 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 4, background: r.read_at ? "transparent" : "var(--ochre)" }} />
+                    <span className="mono">{new Date(r.created_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                    <span><b>{r.title}</b>{r.body ? <span style={{ opacity: 0.7 }}> · {r.body}</span> : null}</span>
+                    <span style={{ fontSize: 12, opacity: 0.7 }}>{projects[r.project_id] || ""}</span>
+                </div>
+            ))}
+            {!rows.length && <p className="v4-note">Nothing yet. Client choices, sign-offs, meeting requests and completed tasks land here.</p>}
+        </div>
+    )
 }
