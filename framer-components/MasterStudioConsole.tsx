@@ -25,6 +25,8 @@ import VignetteStudioConsole from "./VignetteStudioConsole.tsx"
 // Time Bank & EHR with burn alerts, 50/25/25 waterfall, Zoning/Muni engine + Sheet A-001, sub-consultant RFP matrix,
 // trade-bot job queue and Studio Admin Drive refs (needs 20261022_felemaye_master_ecosystem.sql).
 // Every v9 tab, hook and property control is preserved.
+// V4.2 (2026-10-22c): Zoning & permit intelligence (document upload + analysis), consultant directory, standing review
+// time, branded Friday progress notes with images + Welcome Kit (print / PDF). Needs 20261022c SQL.
 // V4.1 (2026-10-22b): Cadence tab — 12-week plan, live-review scheduling + 3-part agendas, Friday updates,
 // presentations with A/B decisions, booking boundaries, studio notification inbox (needs 20261022b SQL).
 
@@ -4726,15 +4728,106 @@ ${z.se_override ?? z.se_required ? '<p class="flag">STRUCTURAL ENGINEER REQUIRED
 <script>setTimeout(()=>print(),400)</script></body></html>`
 }
 
+/* Zoning & permit intelligence (v2, 2026-10-22c). Upload meeting notes / agency letters / research
+   (PDF, Word, Markdown, text — export Google Docs or Notion pages as PDF or Markdown), get a structured
+   analysis: allowed · non-negotiable · negotiable · applications · questions for the planner · sources.
+   Analysis runs in the zoning-analyze edge function (needs ANTHROPIC_API_KEY). */
+const SHEET_DEFAULT: Record<string, [string, string]> = {
+    la_county: ["G-001", "Project Data, Zoning & Code Analysis"],
+    ladbs: ["G-001", "Project Data, Zoning & Code Analysis"],
+    nyc_dob: ["Z-001", "Zoning Analysis (with ZD1 Zoning Diagram)"],
+}
+let PDFJS_C: Promise<any> | null = null
+async function pdfText(file: File) {
+    PDFJS_C ||= import(/* @vite-ignore */ "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.min.mjs" as any).then((m: any) => {
+        m.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.4.168/pdf.worker.min.mjs"
+        return m
+    })
+    const lib = await PDFJS_C
+    const doc = await lib.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise
+    const pages: string[] = []
+    for (let i = 1; i <= doc.numPages; i++) {
+        const c = await (await doc.getPage(i)).getTextContent()
+        pages.push(c.items.map((t: any) => t.str + (t.hasEOL ? "\n" : " ")).join(""))
+    }
+    return pages.join("\n\n")
+}
+let MAMMOTH: Promise<any> | null = null
+async function docxText(file: File) {
+    MAMMOTH ||= new Promise((res, rej) => {
+        if ((window as any).mammoth) return res((window as any).mammoth)
+        const s = document.createElement("script")
+        s.src = "https://cdn.jsdelivr.net/npm/mammoth@1.8.0/mammoth.browser.min.js"
+        s.onload = () => res((window as any).mammoth)
+        s.onerror = rej
+        document.head.appendChild(s)
+    })
+    const m = await MAMMOTH
+    return (await m.extractRawText({ arrayBuffer: await file.arrayBuffer() })).value as string
+}
+async function fileText(f: File): Promise<string> {
+    const n = f.name.toLowerCase()
+    if (n.endsWith(".pdf") || f.type === "application/pdf") return pdfText(f)
+    if (n.endsWith(".docx")) return docxText(f)
+    if (/\.(html?|htm)$/.test(n)) { const d = new DOMParser().parseFromString(await f.text(), "text/html"); return d.body.innerText || d.body.textContent || "" }
+    if (/\.(txt|md|markdown|csv|rtf|json)$/.test(n) || f.type.startsWith("text/")) return f.text()
+    throw new Error("Unsupported file — export as PDF, DOCX, Markdown or text. Scanned images need OCR first.")
+}
+
+function zoningSheetHtml(project: any, z: any, prop: any, sheetNo: string, sheetTitle: string) {
+    const esc = (v: any) => String(v ?? "—").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as any)[c])
+    const A = z.analysis || {}
+    const list = (xs: any[]) => (xs || []).map((x) => `<li>${esc(x)}</li>`).join("")
+    const row = (l: string, a: any, p: any, unit = "") => {
+        const ok = a == null || p == null || p === "" ? "" : l.startsWith("Setback") ? +p >= +a : +p <= +a
+        return `<tr><td>${l}</td><td>${a != null ? esc(a) + unit : "—"}</td><td>${p ? esc(p) + unit : "—"}</td><td class="${ok === "" ? "" : ok ? "ok" : "no"}">${ok === "" ? "" : ok ? "Complies" : "Check"}</td></tr>`
+    }
+    const srcs = (A.sources || []).map((s: any) => `<li>${esc(s.title)}${s.url ? ` — <span class="u">${esc(s.url)}</span>` : ""}</li>`).join("")
+    return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(sheetNo)} ${esc(sheetTitle)} — ${esc(project?.title)}</title>
+<style>@page{size:24in 18in;margin:.5in}body{font:13px/1.5 'Helvetica Neue',Arial,sans-serif;color:#111;margin:0}
+.sheet{display:grid;grid-template-columns:1fr 3.2in;gap:.3in;min-height:16.5in;border:2px solid #111;padding:.3in}
+.cols{display:grid;grid-template-columns:1fr 1fr 1fr;gap:.25in}
+h1{font:600 24px 'Helvetica Neue',Arial;letter-spacing:.08em;margin:0 0 4px}h2{font:600 12px 'Helvetica Neue';letter-spacing:.16em;text-transform:uppercase;border-bottom:1px solid #111;padding-bottom:4px;margin:20px 0 8px}
+table{border-collapse:collapse;width:100%}td,th{border:1px solid #111;padding:6px 8px;text-align:left;vertical-align:top}th{background:#eee;font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+ul{margin:0;padding-left:18px}li{margin:3px 0}.ok{color:#2f5d2f;font-weight:600}.no{color:#8a1f1f;font-weight:600}.u{font-size:10px;color:#555;word-break:break-all}
+.tb{border-left:2px solid #111;padding-left:.2in;display:flex;flex-direction:column;gap:14px}.tb .big{font:600 44px 'Helvetica Neue';letter-spacing:.04em}
+.box{border:1.5px solid #111;padding:10px 12px}.box.red{border-color:#8a1f1f}.box.red h2{color:#8a1f1f;border-color:#8a1f1f}small{color:#555}</style></head><body><div class="sheet"><main>
+<h1>${esc(sheetTitle).toUpperCase()}</h1><small>${esc(z.jurisdiction)} · ${esc((z.overlays || []).join(" · "))}</small>
+<h2>Project data</h2><table><tr><th>Address</th><td>${esc(project?.address)}</td><th>Zone</th><td>${esc(z.zone_class)}</td></tr>
+<tr><th>Lot area</th><td>${z.lot_area_sf ? esc(z.lot_area_sf) + " sf" : "—"}</td><th>Occupancy / type</th><td>${esc(z.occupancy)} / ${esc(z.construction_type)}</td></tr></table>
+${A.summary ? `<p style="font-size:14px;margin:12px 0 0">${esc(A.summary)}</p>` : ""}
+<h2>Allowable vs proposed</h2><table><tr><th>Item</th><th>Allowable / required</th><th>Proposed</th><th>Status</th></tr>
+${row("Setback — front", z.setback_front_ft, prop.front, " ft")}${row("Setback — side", z.setback_side_ft, prop.side, " ft")}${row("Setback — rear", z.setback_rear_ft, prop.rear, " ft")}
+${row("Building height", z.height_cap_ft, prop.height, " ft")}${row("Front-yard fence / wall", z.wall_height_cap_in, prop.wall_in, " in")}
+${row("FAR", z.far_allowable, prop.far_proposed)}</table>
+<div class="cols" style="margin-top:14px">
+<div class="box"><h2>Permitted by right</h2><ul>${list(A.allowed)}</ul></div>
+<div class="box red"><h2>Non-negotiable</h2><ul>${list(A.non_negotiables)}</ul></div>
+<div class="box"><h2>Discretionary paths</h2><ul>${list(A.negotiables)}</ul></div></div>
+<h2>Approvals sequence</h2><ol style="margin:0;padding-left:20px">${list(A.applications)}</ol>
+${(A.conflicts || []).length ? `<h2>To verify</h2><ul>${list(A.conflicts)}</ul>` : ""}
+<h2>Sources</h2><ul>${srcs}</ul><small>Analysis prepared by the designer for coordination; verify against the adopted code and the agency's plan check.</small>
+</main><aside class="tb"><div><b>FELEMAYE LLC</b><br><small>Architectural design studio · Los Angeles</small></div>
+<div><small>PROJECT</small><br><b>${esc(project?.title)}</b><br>${esc(project?.address)}</div><div><small>DATE</small><br>${new Date().toLocaleDateString("en-US")}</div>
+<div><small>STATUS</small><br>${esc(z.status).toUpperCase()}</div><div style="margin-top:auto"><small>SHEET</small><div class="big">${esc(sheetNo)}</div></div></aside></div>
+<script>setTimeout(()=>print(),400)</script></body></html>`
+}
+
 function ZoningMuniEngine({ db, focus }: any) {
     const { pid, picker } = usePick(db, focus)
     const [project, setProject] = React.useState<any>(null)
     const [audits, setAudits] = React.useState<any[]>([])
+    const [refs, setRefs] = React.useState<any[]>([])
     const [notes, setNotes] = React.useState("")
+    const [files, setFiles] = React.useState<{ name: string; chars: number }[]>([])
     const [jur, setJur] = React.useState("la_county")
     const [draft, setDraft] = React.useState<any>(null)
+    const [busy, setBusy] = React.useState("")
+    const [open, setOpen] = React.useState<string | null>(null)
     const [prop, setProp] = React.useState<any>({})
+    const [sheetNo, setSheetNo] = React.useState("")
     const [msg, setMsg] = React.useState("")
+    const [drag, setDrag] = React.useState(false)
     const load = React.useCallback(async () => {
         if (!pid) return
         const [p, a] = await Promise.all([
@@ -4742,173 +4835,157 @@ function ZoningMuniEngine({ db, focus }: any) {
             db.from("project_zoning_audits").select("*").eq("project_id", pid).order("created_at", { ascending: false }),
         ])
         if (a.error) setMsg(a.error.message)
-        setProject(p.data)
-        setAudits(a.data || [])
+        setProject(p.data); setAudits(a.data || [])
+        setOpen((o) => o || (a.data || [])[0]?.id || null)
         const j = String(p.data?.jurisdiction_id || "")
         setJur(/ladbs|la_city/.test(j) ? "ladbs" : /nyc/.test(j) ? "nyc_dob" : "la_county")
     }, [db, pid])
+    React.useEffect(() => { load() }, [load])
     React.useEffect(() => {
-        load()
-    }, [load])
+        db.from("jurisdiction_references").select("*").in("jurisdiction", [jur, "national"]).order("topic").then((r: any) => setRefs(r.data || []), () => {})
+        setSheetNo(SHEET_DEFAULT[jur]?.[0] || "G-001")
+    }, [db, jur])
 
-    function parse() {
+    async function addFiles(list: FileList | File[] | null) {
+        if (!list) return
+        for (const f of Array.from(list)) {
+            setBusy("Reading " + f.name + "…")
+            try {
+                const t = (await fileText(f)).replace(/\n{3,}/g, "\n\n").trim()
+                setNotes((n) => (n ? n + "\n\n" : "") + `──── ${f.name} ────\n` + t)
+                setFiles((fs) => [...fs, { name: f.name, chars: t.length }])
+            } catch (e: any) { setMsg(f.name + ": " + (e?.message || "could not read")) }
+        }
+        setBusy("")
+    }
+    async function analyze() {
+        setBusy("Analyzing — usually 20–40 seconds…"); setMsg("")
+        const { data, error } = await db.functions.invoke("zoning-analyze", { body: { project_id: pid, jurisdiction: jur, text: notes, files: files.map((f) => f.name) } })
+        setBusy("")
+        if (error || data?.error) return setMsg((data?.error || error?.message || "Analysis failed") + (/not set|404|Failed to send/i.test(String(data?.error || error?.message)) ? " — deploy the zoning-analyze function and add ANTHROPIC_API_KEY." : ""))
+        const A = data.analysis || {}
+        const f = A.facts || {}
+        setDraft({ jurisdiction: jur, status: "draft", analysis: A, zone_class: f.zone_class || null, overlays: f.overlays || [], setback_front_ft: f.setback_front_ft ?? null, setback_side_ft: f.setback_side_ft ?? null, setback_rear_ft: f.setback_rear_ft ?? null, height_cap_ft: f.height_cap_ft ?? null, wall_height_cap_in: f.wall_height_cap_in ?? null, transparency_pct: f.transparency_pct ?? null, lot_area_sf: f.lot_area_sf ?? null, far_allowable: f.far_allowable ?? null, occupancy: f.occupancy || null, sheet_number: A.sheet?.number || SHEET_DEFAULT[jur]?.[0] })
+    }
+    function quick() {
         const z: any = parseZoning(notes)
-        const cites = [...BPC, ...(JURIS[jur]?.cites || [])]
-        if (z.overlays.includes("BHO") || (z.hillside && jur === "ladbs")) cites.push(BHO)
-        setDraft({ ...z, jurisdiction: jur, citations: cites, se_required: z.hillside || (z.retaining_wall_max_ft || 0) > 4, status: "draft" })
+        setDraft({ jurisdiction: jur, status: "draft", analysis: {}, ...z, sheet_number: SHEET_DEFAULT[jur]?.[0] })
     }
     async function save() {
         if (!draft) return
         const { se_required, ...row } = draft
-        const { error } = await db.from("project_zoning_audits").insert({ ...row, project_id: pid, source_note: notes, parsed: draft })
-        setMsg(error ? error.message : "Audit saved as draft.")
-        if (!error) {
-            setDraft(null)
-            load()
-        }
+        const num = (v: any) => (v === "" || v == null || isNaN(+v) ? null : +v)
+        const { error } = await db.from("project_zoning_audits").insert({
+            ...row, project_id: pid, source_note: notes.slice(0, 200000), source_files: files.map((f) => f.name),
+            setback_front_ft: num(row.setback_front_ft), setback_side_ft: num(row.setback_side_ft), setback_rear_ft: num(row.setback_rear_ft), height_cap_ft: num(row.height_cap_ft),
+            wall_height_cap_in: num(row.wall_height_cap_in), transparency_pct: num(row.transparency_pct), lot_area_sf: num(row.lot_area_sf), far_allowable: num(row.far_allowable), retaining_wall_max_ft: num(row.retaining_wall_max_ft),
+            parsed: {},
+        })
+        setMsg(error ? error.message : "Saved."); if (!error) { setDraft(null); setFiles([]); load() }
     }
-    async function setStatus(a: any, status: string) {
-        await db.from("project_zoning_audits").update({ status }).eq("id", a.id)
-        load()
-    }
-    async function seOverride(a: any, v: boolean | null) {
-        await db.from("project_zoning_audits").update({ se_override: v }).eq("id", a.id)
-        load()
-    }
+    async function setStatus(a: any, status: string) { await db.from("project_zoning_audits").update({ status }).eq("id", a.id); load() }
     function sheet(a: any) {
-        const w = window.open("", "_blank")
-        if (!w) return setMsg("Allow pop-ups to open Sheet A-001.")
-        w.document.write(a001Html(project, a, prop))
-        w.document.close()
+        const w = window.open("", "_blank"); if (!w) return setMsg("Allow pop-ups to open the sheet.")
+        const t = a.analysis?.sheet?.title || SHEET_DEFAULT[a.jurisdiction]?.[1] || "Zoning & Code Analysis"
+        w.document.write(zoningSheetHtml(project, a, prop, a.sheet_number || sheetNo, t)); w.document.close()
     }
-    const F = (k: string, label: string) => (
-        <label className="v4-field" key={k}>
-            <span className="mono">{label}</span>
-            <input
-                value={draft?.[k] ?? ""}
-                onChange={(e) => setDraft({ ...draft, [k]: e.target.value === "" ? null : isNaN(+e.target.value) ? e.target.value : +e.target.value })}
-            />
-        </label>
+    const copy = (xs: string[]) => { try { navigator.clipboard.writeText(xs.map((x, i) => `${i + 1}. ${x}`).join("\n")); setMsg("Questions copied.") } catch {} }
+    const Col = ({ t, xs, tone }: any) => (xs || []).length ? (
+        <div className="c" style={{ borderTop: `3px solid ${tone}`, margin: 0 }}>
+            <div className="mono" style={{ color: tone, opacity: 1 }}>{t}</div>
+            <ul className="v4-cites" style={{ fontSize: 14 }}>{xs.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul>
+        </div>
+    ) : null
+    const Analysis = ({ A }: any) => (
+        <>
+            {A.summary && <p style={{ fontSize: 15, lineHeight: 1.65, margin: "6px 0 12px" }}>{A.summary}</p>}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))", gap: 12 }}>
+                <Col t="Permitted by right" xs={A.allowed} tone="var(--moss-hi)" />
+                <Col t="Non-negotiable" xs={A.non_negotiables} tone="var(--oxblood-hi)" />
+                <Col t="Negotiable / discretionary" xs={A.negotiables} tone="var(--ochre)" />
+            </div>
+            {(A.applications || []).length > 0 && <><div className="mono" style={{ marginTop: 14 }}>Approvals sequence</div><ol className="v4-cites" style={{ fontSize: 14 }}>{A.applications.map((x: string, i: number) => <li key={i}>{x}</li>)}</ol></>}
+            {(A.conflicts || []).length > 0 && <><div className="mono" style={{ marginTop: 10, color: "var(--oxblood-hi)", opacity: 1 }}>Conflicts to verify</div><ul className="v4-cites" style={{ fontSize: 14 }}>{A.conflicts.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul></>}
+            {(A.questions || []).length > 0 && <><div className="r" style={{ marginTop: 10, justifyContent: "space-between" }}><span className="mono">Questions for the planner</span><button className="b g" onClick={() => copy(A.questions)}>Copy</button></div><ol className="v4-cites" style={{ fontSize: 14 }}>{A.questions.map((x: string, i: number) => <li key={i}>{x}</li>)}</ol></>}
+            {(A.sheet_requirements || []).length > 0 && <><div className="mono" style={{ marginTop: 10 }}>Sheet requirements</div><ul className="v4-cites" style={{ fontSize: 14 }}>{A.sheet_requirements.map((x: string, i: number) => <li key={i}>{x}</li>)}</ul></>}
+            {(A.sources || []).length > 0 && <><div className="mono" style={{ marginTop: 10 }}>Sources</div><ul className="v4-cites" style={{ fontSize: 13 }}>{A.sources.map((s: any, i: number) => <li key={i}>{s.url ? <a href={s.url} target="_blank" rel="noreferrer">{s.title} ↗</a> : s.title}{s.cited_for ? <small style={{ opacity: 0.6 }}> · {s.cited_for}</small> : null}</li>)}</ul></>}
+        </>
     )
-    const latest = audits[0]
     return (
         <section className="v4">
             <div className="r" style={{ justifyContent: "space-between" }}>
-                <div>
-                    <div className="mono">Zoning / muni engine</div>
-                    <h2 className="v4-h">From meeting notes to Sheet A-001</h2>
-                </div>
+                <div><div className="mono">Zoning & permit intelligence</div><h2 className="v4-h">What's allowed, what's fixed, what can be negotiated</h2></div>
                 {picker}
             </div>
             {msg && <p className="v4-note">{msg}</p>}
             <div className="c v4-panel">
                 <div className="r">
                     <select value={jur} onChange={(e) => setJur(e.target.value)} aria-label="Jurisdiction">
-                        <option value="la_county">LA County (Title 22 · DPW)</option>
-                        <option value="ladbs">City of LA (LADBS)</option>
-                        <option value="nyc_dob">New York City (DOB)</option>
+                        <option value="la_county">Unincorporated LA County (Regional Planning · DPW)</option>
+                        <option value="ladbs">City of Los Angeles (City Planning · LADBS)</option>
+                        <option value="nyc_dob">New York City (DOB · LPC)</option>
                     </select>
-                    <button className="b" onClick={parse} disabled={!notes.trim()}>
-                        Parse notes
-                    </button>
+                    <label className="b g" style={{ cursor: "pointer" }}>Upload documents<input type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm,.csv" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = "" }} /></label>
+                    <button className="b" onClick={analyze} disabled={!!busy || notes.trim().length < 40}>Analyze</button>
+                    <button className="b g" onClick={quick} disabled={!notes.trim()}>Quick extract (no AI)</button>
                 </div>
-                <textarea
-                    rows={7}
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    placeholder={"Paste counter / meeting notes, e.g.\nZone R-1. Front yard setback 20 ft, side 5 ft, rear 15 ft. Height limit 35 ft.\nFront-yard wall max 42 in solid, 50% transparent above. Lot area 6,200 sf. FAR 0.5. Occupancy R-3."}
-                    style={{ width: "100%", marginTop: 10 }}
-                />
+                <div onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); addFiles(e.dataTransfer.files) }}
+                    style={{ marginTop: 12, border: `1px dashed ${drag ? "var(--ochre)" : "color-mix(in srgb,var(--ink) 30%,transparent)"}`, padding: 14, background: drag ? "color-mix(in srgb,var(--ochre) 8%,transparent)" : "transparent" }}>
+                    <div className="mono" style={{ marginBottom: 8 }}>Drop PDFs, Word docs or Markdown here · Google Docs: File › Download › PDF · Notion: ⋯ › Export › Markdown or PDF</div>
+                    {files.length > 0 && <div className="r" style={{ marginBottom: 8 }}>{files.map((f) => <span key={f.name} className="v4-chip" style={{ borderColor: "var(--slate)" }}>{f.name} · {Math.round(f.chars / 1000)}k chars</span>)}<button className="b g" onClick={() => { setFiles([]); setNotes("") }}>Clear</button></div>}
+                    <textarea rows={8} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="…or paste meeting notes here." style={{ width: "100%", fontSize: 15 }} />
+                </div>
+                {busy && <p className="v4-note">{busy}</p>}
             </div>
+
             {draft && (
-                <div className="c v4-panel">
-                    <div className="mono">Parsed draft · verify every value</div>
+                <div className="c v4-panel" style={{ borderColor: "var(--ochre)" }}>
+                    <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">New analysis · review, then save</span><div className="r"><button className="b g" onClick={() => setDraft(null)}>Discard</button><button className="b" onClick={save}>Save analysis</button></div></div>
                     <div className="v4-grid">
-                        {F("zone_class", "Zone class")}
-                        {F("lot_area_sf", "Lot area sf")}
-                        {F("far_allowable", "FAR allowable")}
-                        {F("setback_front_ft", "Front setback ft")}
-                        {F("setback_side_ft", "Side setback ft")}
-                        {F("setback_rear_ft", "Rear setback ft")}
-                        {F("height_cap_ft", "Height cap ft")}
-                        {F("wall_height_cap_in", "Wall cap in")}
-                        {F("transparency_pct", "Transparency %")}
-                        {F("occupancy", "Occupancy")}
-                        {F("construction_type", "Construction type")}
-                        {F("retaining_wall_max_ft", "Retaining wall ft")}
-                    </div>
-                    <p>
-                        Overlays: {draft.overlays?.join(", ") || "none"} · Hillside:{" "}
-                        <label>
-                            <input type="checkbox" checked={!!draft.hillside} onChange={(e) => setDraft({ ...draft, hillside: e.target.checked })} /> yes
-                        </label>
-                    </p>
-                    {(draft.hillside || (draft.retaining_wall_max_ft || 0) > 4) && <p className="v4-alert">Structural Engineer Required</p>}
-                    <ul className="v4-cites">
-                        {draft.citations.map((c: Cite) => (
-                            <li key={c.code}>
-                                <b>{c.code}</b> — {c.note}
-                            </li>
-                        ))}
-                    </ul>
-                    <button className="b" onClick={save}>
-                        Save audit
-                    </button>
-                </div>
-            )}
-            {latest && (
-                <div className="c v4-panel">
-                    <div className="mono">Sheet A-001 · proposed values</div>
-                    <div className="v4-grid">
-                        {[
-                            ["far_proposed", "FAR proposed"],
-                            ["floor_area_proposed", "Floor area sf"],
-                            ["front", "Front setback ft"],
-                            ["side", "Side setback ft"],
-                            ["rear", "Rear setback ft"],
-                            ["height", "Height ft"],
-                            ["wall_in", "Solid wall in"],
-                            ["transparency", "Openness %"],
-                        ].map(([k, l]) => (
-                            <label className="v4-field" key={k}>
-                                <span className="mono">{l}</span>
-                                <input value={prop[k] || ""} onChange={(e) => setProp({ ...prop, [k]: e.target.value })} />
-                            </label>
+                        {[["zone_class", "Zone"], ["setback_front_ft", "Front yard ft"], ["setback_side_ft", "Side ft"], ["setback_rear_ft", "Rear ft"], ["height_cap_ft", "Height ft"], ["wall_height_cap_in", "Front fence/wall in"], ["transparency_pct", "Open %"], ["lot_area_sf", "Lot sf"], ["sheet_number", "Sheet no."]].map(([k, l]) => (
+                            <label className="v4-field" key={k}><span className="mono">{l}</span><input value={draft[k] ?? ""} onChange={(e) => setDraft({ ...draft, [k]: e.target.value })} /></label>
                         ))}
                     </div>
+                    <Analysis A={draft.analysis || {}} />
                 </div>
             )}
+
             {audits.map((a) => {
-                const se = a.se_override ?? a.se_required
+                const A = a.analysis || {}
+                const isOpen = open === a.id
                 return (
                     <div key={a.id} className="c v4-panel">
                         <div className="r" style={{ justifyContent: "space-between" }}>
-                            <div>
-                                <span className="tag">{a.status}</span> <b>{a.zone_class || "Zone ?"}</b> {(a.overlays || []).join(" · ")}{" "}
-                                <small>{new Date(a.created_at).toLocaleDateString()}</small>
-                                {se && <span className="v4-alert">Structural Engineer Required</span>}
-                            </div>
+                            <button className="b g" onClick={() => setOpen(isOpen ? null : a.id)} style={{ textAlign: "left" }} aria-expanded={isOpen}>
+                                {isOpen ? "▾" : "▸"} {a.zone_class || "Analysis"} {(a.overlays || []).length ? "· " + a.overlays.join(" · ") : ""} · {new Date(a.created_at).toLocaleDateString()}
+                            </button>
                             <div className="r">
-                                <button className="b g" onClick={() => sheet(a)}>
-                                    Sheet A-001
-                                </button>
-                                {a.status !== "issued" && (
-                                    <button className="b g" onClick={() => setStatus(a, a.status === "draft" ? "reviewed" : "issued")}>
-                                        {a.status === "draft" ? "Mark reviewed" : "Issue to client"}
-                                    </button>
-                                )}
-                                <button className="b g" onClick={() => seOverride(a, se ? false : true)}>
-                                    {se ? "SE not needed" : "Require SE"}
-                                </button>
+                                <span className="tag">{a.status}</span>
+                                <button className="b g" onClick={() => sheet(a)}>Sheet {a.sheet_number || sheetNo}</button>
+                                {a.status !== "issued" && <button className="b g" onClick={() => setStatus(a, a.status === "draft" ? "reviewed" : "issued")}>{a.status === "draft" ? "Mark reviewed" : "Issue to client"}</button>}
                             </div>
                         </div>
-                        <small>
-                            Front {a.setback_front_ft ?? "—"} ft · side {a.setback_side_ft ?? "—"} · rear {a.setback_rear_ft ?? "—"} · height {a.height_cap_ft ?? "—"} ft · wall {a.wall_height_cap_in ?? "—"} in ·
-                            FAR {a.far_allowable ?? "—"}
-                        </small>
+                        {isOpen && <div style={{ marginTop: 10 }}>
+                            <Analysis A={A} />
+                            {(a.source_files || []).length > 0 && <p className="v4-note">From: {a.source_files.join(", ")}</p>}
+                            <div className="mono" style={{ marginTop: 12 }}>Proposed values for the sheet</div>
+                            <div className="v4-grid">{[["front", "Front setback ft"], ["side", "Side ft"], ["rear", "Rear ft"], ["height", "Height ft"], ["wall_in", "Fence/wall in"], ["far_proposed", "FAR"]].map(([k, l]) => <label className="v4-field" key={k}><span className="mono">{l}</span><input value={prop[k] || ""} onChange={(e) => setProp({ ...prop, [k]: e.target.value })} /></label>)}</div>
+                        </div>}
                     </div>
                 )
             })}
+
+            <details className="v4-acc">
+                <summary><span>Reference library · {jur === "nyc_dob" ? "NYC" : jur === "ladbs" ? "City of LA" : "LA County"} · {refs.length}</span></summary>
+                <p className="v4-note">Sheet naming: {SHEET_DEFAULT[jur]?.[0]} — {SHEET_DEFAULT[jur]?.[1]}. Items marked “to verify” are leads, not confirmed code.</p>
+                {refs.map((r) => (
+                    <div key={r.id} style={{ padding: "10px 0", borderTop: ".5px solid color-mix(in srgb,var(--ink) 15%,transparent)" }}>
+                        <div className="r" style={{ gap: 8 }}><span className="tag">{r.topic}</span><b style={{ fontSize: 14 }}>{r.title}</b>{r.status !== "verified" && <span className="v4-chip" style={{ borderColor: "var(--ochre)" }}>to verify</span>}</div>
+                        {r.body && <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: "6px 0 0", opacity: 0.85 }}>{r.body}</p>}
+                        {r.url && <a href={r.url} target="_blank" rel="noreferrer" style={{ fontSize: 12 }}>{r.agency || "Source"} ↗</a>}
+                    </div>
+                ))}
+            </details>
         </section>
     )
 }
@@ -5010,6 +5087,7 @@ function ConsultantsCRM({ db, focus }: any) {
                 {picker}
             </div>
             <p className="v4-note">FELEMAYE stays lead designer and coordinates the work; the engineer is engaged and paid by the client, so engineering liability sits with the Engineer of Record.</p>
+            <ConsultantDirectory db={db} cons={cons} reload={load} project={null} />
             {seFlag && (
                 <div className="v4-alert v4-alert-block">
                     Structural Engineer Required — the latest zoning audit flags a hillside site or a retaining wall over 4 ft.
@@ -5038,11 +5116,14 @@ function ConsultantsCRM({ db, focus }: any) {
                             <div>
                                 <span className="tag">{r.discipline}</span> <b>{r.title}</b> {r.trigger_reason && <small>· {r.trigger_reason}</small>}
                             </div>
+                            <div className="r">
+                            {r.status === "draft" && !P.length && <button className="b g" onClick={async () => { await db.from("consultant_rfps").delete().eq("id", r.id); load() }} aria-label="Remove empty RFP">✕</button>}
                             <select value={r.status} onChange={(e) => patchRfp(r, { status: e.target.value })} aria-label="RFP status">
                                 {["draft", "sent", "comparing", "approved", "closed"].map((s) => (
                                     <option key={s}>{s}</option>
                                 ))}
                             </select>
+                            </div>
                         </div>
                         {P.length > 0 && (
                             <div className="tw">
@@ -5112,7 +5193,7 @@ function ConsultantsCRM({ db, focus }: any) {
             })}
             <details className="v4-acc">
                 <summary>
-                    <span>Consultant directory · {cons.length}</span>
+                    <span>Add a consultant</span>
                 </summary>
                 <div className="r" style={{ margin: "10px 0" }}>
                     <select value={nc.discipline} onChange={(e) => setNc({ ...nc, discipline: e.target.value })} aria-label="Discipline">
@@ -5126,27 +5207,6 @@ function ConsultantsCRM({ db, focus }: any) {
                     <button className="b" onClick={addConsultant}>
                         Add
                     </button>
-                </div>
-                <div className="tw">
-                    <table>
-                        <tbody>
-                            {cons.map((c) => (
-                                <tr key={c.id}>
-                                    <td>
-                                        <span className="tag">{c.discipline}</span>
-                                    </td>
-                                    <td>
-                                        <b>{c.firm}</b>
-                                        <br />
-                                        <small>{c.contact_name}</small>
-                                    </td>
-                                    <td>{c.license_no && <small>Lic. {c.license_no}</small>}</td>
-                                    <td>{c.email && <a href={"mailto:" + c.email}>Email</a>}</td>
-                                    <td>{c.phone && <a href={"tel:" + c.phone}>{c.phone}</a>}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
                 </div>
             </details>
         </section>
@@ -5471,9 +5531,9 @@ ${
    options, booking boundaries and the studio notification inbox.
    ════════════════════════════════════════════════════════════════════════════ */
 const SOP_PARTS = [
-    { key: "context", title: "Context & retrospective", minutes: 10, items: ["What the studio completed since our last session", "How this milestone answers your goals for the courtyard"] },
-    { key: "present", title: "Visual presentation & deliverables", minutes: 25, items: ["Curated presentation, never raw model files", "Decision points side by side: Option A vs Option B, with cost, code and aesthetic trade-offs"] },
-    { key: "approve", title: "Formal approval & next steps", minutes: 10, items: ["Sign-off in the portal before the next phase begins", "Confirm the date of the next milestone review"] },
+    { key: "context", title: "Where we are", items: ["What the studio has completed since we last met", "How this milestone serves your goals for the courtyard"] },
+    { key: "present", title: "The work", items: ["A short presentation of the design", "Any options side by side, with cost, code and design trade-offs"] },
+    { key: "approve", title: "Decisions & next steps", items: ["Your decision and sign-off in the portal", "Confirm the date of our next review"] },
 ]
 const addDays = (iso: string, n: number) => { const d = new Date(iso + "T12:00:00"); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 const short = (iso: string) => new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })
@@ -5558,11 +5618,27 @@ function CadenceStudio({ db, focus }: any) {
                 <div className="v4-kpis">
                     <div className="v4-kpi"><span className="mono">Included sessions used</span><b>{usage.included_used} / {usage.included_sessions}</b><Meter value={usage.included_used} max={usage.included_sessions} tone="var(--moss)" label="Included sessions" /></div>
                     <div className="v4-kpi"><span className="mono">Billable advisory calls</span><b>{usage.advisory_sessions}</b><small>{usage.advisory_rate ? `${money(+usage.advisory_rate)}/h → final reconciliation` : "Set your advisory rate in Settings"}</small></div>
-                    <div className="v4-kpi"><span className="mono">Friday updates posted</span><b>{d.updates.filter((u: any) => u.published_at).length}</b><small>{d.weeks.filter((w: any) => w.touchpoint === "async").length} off-weeks planned</small></div>
+                    <div className="v4-kpi"><span className="mono">Friday notes posted</span><b>{d.updates.filter((u: any) => u.published_at).length}</b><small>{d.weeks.filter((w: any) => w.touchpoint === "async").length} off-weeks planned</small></div>
+                </div>
+            )}
+            {d.cfg?.standing_weekday && (
+                <div className="c v4-panel" style={{ borderColor: "var(--moss)" }}>
+                    <div className="r" style={{ justifyContent: "space-between" }}>
+                        <div><span className="mono">Client's standing review time</span><div style={{ fontSize: 16, marginTop: 4 }}>{["", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays"][d.cfg.standing_weekday]} at {d.cfg.standing_time} PT{d.cfg.standing_note ? <span style={{ opacity: 0.7 }}> · “{d.cfg.standing_note}”</span> : null}</div></div>
+                        <button className="b" onClick={async () => {
+                            const todo = d.weeks.filter((w: any) => w.touchpoint === "live" && !w.event_id)
+                            for (const w of todo) {
+                                const day = addDays(kick, (w.week_no - 1) * 7 + (d.cfg.standing_weekday - 1))
+                                if (day < today) continue
+                                await schedule(w, `${day}T${d.cfg.standing_time}`, 45, "", "", false)
+                            }
+                            setMsg(todo.length ? "Standing time applied to the unscheduled live reviews." : "Every live review already has a date.")
+                        }}>Apply to unscheduled live reviews</button>
+                    </div>
                 </div>
             )}
             <div className="r" style={{ margin: "6px 0 12px" }}>
-                {Tab("plan", "12-week plan")}{Tab("updates", "Friday updates")}{Tab("presentations", "Presentations", d.pres.length)}{Tab("inbox", "Inbox")}{Tab("settings", "Settings & booking")}
+                {Tab("plan", "12-week plan")}{Tab("updates", "Friday notes")}{Tab("presentations", "Presentations", d.pres.length)}{Tab("inbox", "Inbox")}{Tab("settings", "Settings & booking")}
             </div>
 
             {view === "plan" && d.weeks.map((w: any) => {
@@ -5598,7 +5674,7 @@ function CadenceStudio({ db, focus }: any) {
                                 <select value={w.status} onChange={(e) => patchWeek(w, { status: e.target.value })} aria-label="Week status">{["planned", "in_progress", "done", "moved"].map((s) => <option key={s}>{s}</option>)}</select>
                                 {w.touchpoint === "live" && <button className="b g" onClick={() => setEdit({ kind: "schedule", row: w })}>{ev ? "Reschedule" : "Schedule"}</button>}
                                 {w.touchpoint === "live" && <button className="b g" onClick={() => setEdit({ kind: "agenda", row: ag || { project_id: pid, week_no: w.week_no, title: w.title, parts: SOP_PARTS, decisions: w.approval_required ? [{ q: w.approval_required }] : [], status: "draft", event_id: w.event_id } })}>Agenda</button>}
-                                {w.touchpoint === "async" && <button className="b g" onClick={() => setEdit({ kind: "update", row: d.updates.find((u: any) => u.week_no === w.week_no) || { project_id: pid, week_no: w.week_no, title: `Week ${w.week_no} · ${w.title}`, highlights: [] } })}>Friday update</button>}
+                                {w.touchpoint === "async" && <button className="b g" onClick={() => setEdit({ kind: "update", row: d.updates.find((u: any) => u.week_no === w.week_no) || { project_id: pid, week_no: w.week_no, title: `Week ${w.week_no} · ${w.title}`, highlights: [] } })}>Friday note</button>}
                                 {w.touchpoint === "live" && <button className="b g" onClick={() => setEdit({ kind: "pres", row: d.pres.find((x: any) => x.week_no === w.week_no) || { project_id: pid, week_no: w.week_no, phase_seq: w.phase_seq, title: w.presentation ? w.title : w.title, subtitle: w.touchpoint_title, slides: [], options: [], decision_prompt: w.approval_required || "" } })}>Presentation</button>}
                             </div>
                         </div>
@@ -5608,7 +5684,7 @@ function CadenceStudio({ db, focus }: any) {
 
             {view === "updates" && (
                 <>
-                    <button className="b" onClick={() => setEdit({ kind: "update", row: { project_id: pid, week_no: week || 1, title: `Week ${week || 1} · Studio update`, highlights: [] } })}>+ New Friday update</button>
+                    <button className="b" onClick={() => setEdit({ kind: "update", row: { project_id: pid, week_no: week || 1, title: `Week ${week || 1} · Studio update`, highlights: [] } })}>+ New Friday note</button>
                     {d.updates.map((u: any) => (
                         <div key={u.id} className="c v4-panel">
                             <div className="r" style={{ justifyContent: "space-between" }}>
@@ -5690,7 +5766,7 @@ function AgendaEditor({ db, row, onClose }: any) {
     async function save(status?: string) {
         const body: any = {
             project_id: a.project_id, week_no: a.week_no, event_id: a.event_id || null, title: a.title,
-            parts: a.parts.map((p: any) => ({ key: p.key, title: p.title, minutes: +p.minutes || 0, items: lines(p.text) })),
+            parts: a.parts.map((p: any) => ({ key: p.key, title: p.title, items: lines(p.text) })),
             decisions: lines(a.dtext).map((q) => ({ q, outcome: (row.decisions || []).find((x: any) => x.q === q)?.outcome || null })),
             summary: a.summary || null, next_meeting_at: a.next ? new Date(a.next).toISOString() : null,
         }
@@ -5699,14 +5775,13 @@ function AgendaEditor({ db, row, onClose }: any) {
         if (r.error) return setMsg(r.error.message)
         onClose()
     }
-    const total = a.parts.reduce((s: number, p: any) => s + (+p.minutes || 0), 0)
     return (
-        <Drawer title={`Agenda · ${total} min`} onClose={onClose}>
+        <Drawer title="Agenda" onClose={onClose}>
             <label className="v4-field"><span className="mono">Title</span><input value={a.title} onChange={(e) => setA({ ...a, title: e.target.value })} /></label>
             {a.parts.map((p: any, i: number) => (
                 <div key={i} className="c v4-panel">
                     <div className="r"><input value={p.title} onChange={(e) => { const ps = [...a.parts]; ps[i] = { ...p, title: e.target.value }; setA({ ...a, parts: ps }) }} style={{ flex: 1 }} aria-label="Part title" />
-                        <input type="number" value={p.minutes} onChange={(e) => { const ps = [...a.parts]; ps[i] = { ...p, minutes: e.target.value }; setA({ ...a, parts: ps }) }} style={{ width: 70 }} aria-label="Minutes" /><span className="mono">min</span></div>
+                        </div>
                     <textarea rows={3} value={p.text} onChange={(e) => { const ps = [...a.parts]; ps[i] = { ...p, text: e.target.value }; setA({ ...a, parts: ps }) }} style={{ width: "100%", marginTop: 8 }} aria-label="Talking points, one per line" />
                 </div>
             ))}
@@ -5726,10 +5801,84 @@ function AgendaEditor({ db, row, onClose }: any) {
     )
 }
 
+/* ── Brand print layer: Friday Progress Note + Welcome Kit (Letter, cream paper, Cormorant + Inter) ──
+   Workflow that adds no new tools: drop 2–4 images you already make that week (Revit / Enscape views,
+   site photos, marked-up sheets), write three lines, Publish. The client sees it in the portal; "Print / PDF"
+   gives the same note as a branded one-pager for email or the binder. */
+const BRAND = { paper: "#F4EFE4", ink: "#2B2B28", accent: "#8C6F52", line: "#D9CFBD", soft: "#6E675C" }
+const escH = (v: any) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as any)[c])
+const PRINT_HEAD = (title: string) => `<!doctype html><html><head><meta charset="utf-8"><title>${escH(title)}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>@page{size:letter;margin:0}*{box-sizing:border-box}html,body{margin:0;background:${BRAND.paper};color:${BRAND.ink};-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font:300 11.5pt/1.6 Inter,system-ui,sans-serif}.pg{width:8.5in;min-height:11in;padding:.7in .75in .6in;position:relative;page-break-after:always;display:flex;flex-direction:column}.pg:last-child{page-break-after:auto}
+.mono{font:500 7.5pt/1.4 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:${BRAND.soft}}
+.wm{font:500 13pt 'Cormorant Garamond',serif;letter-spacing:.42em;color:${BRAND.accent}}
+h1{font:400 34pt/1.05 'Cormorant Garamond',serif;margin:.18in 0 .12in;letter-spacing:.005em}h2{font:400 20pt/1.15 'Cormorant Garamond',serif;margin:0 0 .1in}
+h3{font:500 7.5pt 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:${BRAND.accent};margin:.28in 0 .08in}
+.rule{height:1px;background:${BRAND.line};margin:.16in 0}.hd{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid ${BRAND.line};padding-bottom:.12in}
+.ft{margin-top:auto;display:flex;justify-content:space-between;border-top:1px solid ${BRAND.line};padding-top:.1in}
+.lead{font:400 15pt/1.5 'Cormorant Garamond',serif;margin:0}
+.imgs{display:grid;gap:.12in;margin:.22in 0 .05in}.imgs figure{margin:0}.imgs img{width:100%;height:100%;object-fit:cover;display:block;background:#E7DFD1}
+.imgs figcaption{font:400 8.5pt/1.4 Inter;color:${BRAND.soft};margin-top:.05in}
+ul.dash{list-style:none;padding:0;margin:0}ul.dash li{padding:.06in 0 .06in .22in;position:relative;border-bottom:1px solid ${BRAND.line}}ul.dash li:before{content:'—';position:absolute;left:0;color:${BRAND.accent}}
+table{width:100%;border-collapse:collapse;font-size:9.5pt}td,th{text-align:left;vertical-align:top;padding:.07in .08in;border-bottom:1px solid ${BRAND.line}}th{font:500 7pt 'IBM Plex Mono';letter-spacing:.18em;text-transform:uppercase;color:${BRAND.soft}}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:.35in}.cover{justify-content:center}.cover h1{font-size:54pt}.box{border:1px solid ${BRAND.line};padding:.16in .2in}
+.sig{font:italic 400 16pt 'Cormorant Garamond',serif;margin-top:.2in}
+@media screen{body{background:#cfc8bb}.pg{margin:.3in auto;box-shadow:0 10px 40px rgba(0,0,0,.18);background:${BRAND.paper}}}</style></head><body>`
+const PRINT_TAIL = `<script>Promise.all([document.fonts?document.fonts.ready:0,...[...document.images].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r}))]).then(()=>setTimeout(()=>print(),350))</script></body></html>`
+function openPrint(html: string, setMsg?: (s: string) => void) {
+    const w = window.open("", "_blank")
+    if (!w) return setMsg && setMsg("Allow pop-ups to open the print view.")
+    w.document.write(html); w.document.close()
+}
+async function signAll(db: any, paths: string[]) {
+    const out: Record<string, string> = {}
+    await Promise.all(paths.map(async (p) => { const { data } = await db.storage.from("project-files").createSignedUrl(p, 3600); out[p] = data?.signedUrl || "" }))
+    return out
+}
+function fridayNoteHtml(project: any, u: any, urls: Record<string, string>, nextReview?: string) {
+    const imgs = (u.images || []).filter((x: any) => urls[x.path])
+    const grid = imgs.length === 1 ? "grid-template-columns:1fr;height:4.1in" : imgs.length === 2 ? "grid-template-columns:1fr 1fr;height:3.1in" : "grid-template-columns:1.6fr 1fr;grid-template-rows:1fr 1fr;height:3.9in"
+    const fig = (x: any, i: number) => `<figure style="${imgs.length >= 3 && i === 0 ? "grid-row:span 2" : ""};min-height:0;display:flex;flex-direction:column"><div style="flex:1;min-height:0"><img src="${urls[x.path]}" alt=""></div>${x.caption ? `<figcaption>${escH(x.caption)}</figcaption>` : ""}</figure>`
+    const date = new Date(u.published_at || Date.now()).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+    return PRINT_HEAD(`Friday Progress Note · ${u.title}`) + `<section class="pg">
+<div class="hd"><span class="wm">FELEMAYE</span><span class="mono">Friday Progress Note${u.week_no ? ` · Week ${String(u.week_no).padStart(2, "0")}` : ""}</span></div>
+<div class="mono" style="margin-top:.22in">${escH(project?.title)} · ${escH(project?.address)}</div>
+<h1>${escH(u.title)}</h1><div class="mono">${escH(date)}</div>
+${u.body ? `<div class="rule"></div><p class="lead">${escH(u.body).replace(/\n/g, "<br>")}</p>` : ""}
+${imgs.length ? `<div class="imgs" style="${grid}">${imgs.slice(0, 3).map(fig).join("")}</div>` : ""}
+<div class="two" style="margin-top:.1in">
+ <div>${(u.highlights || []).length ? `<h3>This week in the studio</h3><ul class="dash">${u.highlights.map((h: string) => `<li>${escH(h)}</li>`).join("")}</ul>` : ""}</div>
+ <div>${u.next_up ? `<h3>Next</h3><p style="margin:0">${escH(u.next_up)}</p>` : ""}${nextReview ? `<h3>Your next review</h3><p style="margin:0">${escH(nextReview)}</p>` : ""}${u.asks ? `<h3>From you</h3><p style="margin:0">${escH(u.asks)}</p>` : ""}</div>
+</div>
+<div class="ft"><span class="mono">Felema Yemaneberhan · FELEMAYE LLC</span><span class="mono">felemaye.com</span></div></section>` + PRINT_TAIL
+}
+
 function UpdateEditor({ db, pid, row, onClose }: any) {
-    const [u, setU] = React.useState<any>({ ...row, htext: (row.highlights || []).join("\n") })
+    const [u, setU] = React.useState<any>({ ...row, images: row.images || [], htext: (row.highlights || []).join("\n") })
     const [file, setFile] = React.useState<File | null>(null)
+    const [busy, setBusy] = React.useState(false)
+    const [thumbs, setThumbs] = React.useState<Record<string, string>>({})
     const [msg, setMsg] = React.useState("")
+    React.useEffect(() => { const ps = (u.images || []).map((x: any) => x.path).filter((p: string) => !thumbs[p]); if (ps.length) signAll(db, ps).then((m) => setThumbs((t) => ({ ...t, ...m }))) }, [u.images])
+    async function addImages(list: FileList | null) {
+        if (!list?.length) return
+        setBusy(true)
+        const add: any[] = []
+        for (const f of Array.from(list).slice(0, 6)) {
+            if (f.size > 20 * 1024 * 1024) { setMsg(f.name + " is over 20 MB"); continue }
+            const path = `${pid}/studio/updates/${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`
+            const up = await db.storage.from("project-files").upload(path, f)
+            if (up.error) setMsg(up.error.message); else add.push({ path, caption: "" })
+        }
+        setU((x: any) => ({ ...x, images: [...(x.images || []), ...add] })); setBusy(false)
+    }
+    const setImg = (i: number, patch: any) => setU({ ...u, images: u.images.map((x: any, k: number) => (k === i ? { ...x, ...patch } : x)) })
+    function payload(publish: boolean, file_path: string | null) {
+        const body: any = { project_id: pid, week_no: +u.week_no || null, title: u.title, body: u.body || null, highlights: lines(u.htext), video_url: u.video_url || null, next_up: u.next_up || null, file_path, images: u.images || [] }
+        if (publish && !u.published_at) body.published_at = new Date().toISOString()
+        return body
+    }
     async function save(publish: boolean) {
         let file_path = u.file_path || null
         if (file) {
@@ -5738,29 +5887,142 @@ function UpdateEditor({ db, pid, row, onClose }: any) {
             if (up.error) return setMsg(up.error.message)
             file_path = path
         }
-        const body: any = { project_id: pid, week_no: +u.week_no || null, title: u.title, body: u.body || null, highlights: lines(u.htext), video_url: u.video_url || null, next_up: u.next_up || null, file_path }
-        if (publish && !u.published_at) body.published_at = new Date().toISOString()
-        const r = u.id ? await db.from("async_updates").update(body).eq("id", u.id) : await db.from("async_updates").insert(body)
+        let r = u.id ? await db.from("async_updates").update(payload(publish, file_path)).eq("id", u.id) : await db.from("async_updates").insert(payload(publish, file_path))
+        if (r.error && /images/.test(r.error.message || "")) { const { images, ...b } = payload(publish, file_path); r = u.id ? await db.from("async_updates").update(b).eq("id", u.id) : await db.from("async_updates").insert(b) }
         if (r.error) return setMsg(r.error.message)
         onClose()
     }
+    async function preview() {
+        const [{ data: project }, { data: ev }] = await Promise.all([
+            db.from("projects").select("title,address").eq("id", pid).maybeSingle(),
+            db.from("calendar_events").select("title,starts_at").eq("project_id", pid).gte("starts_at", new Date().toISOString()).order("starts_at").limit(1),
+        ])
+        const urls = await signAll(db, (u.images || []).map((x: any) => x.path))
+        const next = ev?.[0] ? `${ev[0].title} — ${new Date(ev[0].starts_at).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} PT` : ""
+        openPrint(fridayNoteHtml(project, { ...u, highlights: lines(u.htext) }, urls, next), setMsg)
+    }
     return (
-        <Drawer title="Friday studio update" onClose={onClose}>
-            <p className="v4-note">A 2–3 minute Loom or a short note. Lead with what moved in the studio this week; keep it visual and calm.</p>
+        <Drawer title="Friday progress note" onClose={onClose}>
+            <p className="v4-note">About ten minutes with what you already have: two to four images from the week (Revit or Enscape views, site photos, a marked-up sheet), a short note, three highlights. The client reads it in the portal; Print / PDF gives the same note as a branded one-pager. No video is promised.</p>
             <div className="v4-grid" style={{ gridTemplateColumns: "90px 1fr" }}>
                 <label className="v4-field"><span className="mono">Week</span><input type="number" value={u.week_no || ""} onChange={(e) => setU({ ...u, week_no: e.target.value })} /></label>
-                <label className="v4-field"><span className="mono">Title</span><input value={u.title} onChange={(e) => setU({ ...u, title: e.target.value })} /></label>
+                <label className="v4-field"><span className="mono">Title</span><input value={u.title} onChange={(e) => setU({ ...u, title: e.target.value })} placeholder="Site measured, County research under way" /></label>
             </div>
-            <label className="v4-field"><span className="mono">Note</span><textarea rows={6} value={u.body || ""} onChange={(e) => setU({ ...u, body: e.target.value })} placeholder="e.g. Completed the Revit exterior base model, sent a preliminary inquiry to LA County Planning, and started the lookbook for next week's review." /></label>
+            <label className="v4-field"><span className="mono">Note</span><textarea rows={5} value={u.body || ""} onChange={(e) => setU({ ...u, body: e.target.value })} placeholder="Two or three sentences in your voice: what moved this week and why it matters for the courtyard." /></label>
+            <div className="c v4-panel">
+                <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">Images · {(u.images || []).length}</span><label className="b g" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "+ Add images"}<input type="file" accept="image/*" multiple hidden onChange={(e) => { addImages(e.target.files); e.currentTarget.value = "" }} /></label></div>
+                {(u.images || []).map((x: any, i: number) => (
+                    <div key={x.path} className="r" style={{ marginTop: 8, flexWrap: "nowrap" }}>
+                        <span style={{ width: 64, height: 48, flex: "none", background: "color-mix(in srgb,var(--ink) 10%,transparent)", overflow: "hidden" }}>{thumbs[x.path] && <img src={thumbs[x.path]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}</span>
+                        <input value={x.caption || ""} placeholder="Caption (e.g. Revit massing — Option B, street view)" onChange={(e) => setImg(i, { caption: e.target.value })} style={{ flex: 1 }} />
+                        <button className="b g" onClick={() => setU({ ...u, images: u.images.filter((_: any, k: number) => k !== i) })} aria-label="Remove image">✕</button>
+                    </div>
+                ))}
+            </div>
             <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Highlights (one per line)</span><textarea rows={3} value={u.htext} onChange={(e) => setU({ ...u, htext: e.target.value })} /></label>
-            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Loom / video link</span><input value={u.video_url || ""} onChange={(e) => setU({ ...u, video_url: e.target.value })} /></label>
-            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Next up</span><input value={u.next_up || ""} onChange={(e) => setU({ ...u, next_up: e.target.value })} /></label>
-            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">PDF progress note (optional)</span><input type="file" accept="application/pdf,image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
+            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Next</span><input value={u.next_up || ""} onChange={(e) => setU({ ...u, next_up: e.target.value })} placeholder="Massing options A and B for our kickoff call" /></label>
+            <details style={{ marginTop: 10 }}><summary className="mono" style={{ cursor: "pointer" }}>Optional: video link · PDF attachment</summary>
+                <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Video link (only if you recorded one)</span><input value={u.video_url || ""} onChange={(e) => setU({ ...u, video_url: e.target.value })} /></label>
+                <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Attach a PDF</span><input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
+            </details>
             <div className="r" style={{ marginTop: 14 }}>
                 <button className="b g" onClick={() => save(false)}>Save draft</button>
+                <button className="b g" onClick={preview}>Print / PDF</button>
                 <button className="b" onClick={() => save(true)}>{u.published_at ? "Save" : "Publish to client"}</button>
             </div>
             {msg && <p className="v4-note">{msg}</p>}
+        </Drawer>
+    )
+}
+
+/* ── Welcome Kit: generated from the project's own data, edited here, printed as a branded PDF ── */
+const KIT_NEEDS = [
+    "Any existing survey, plot plan, or prior permit drawings of the house",
+    "Title report or grant deed (shows the legal description and any easements)",
+    "Photos of the front yard, gate and facade you love — and anything you'd change",
+    "Utility locations you know of (sprinkler lines, gas, low-voltage lighting)",
+    "Your preferred standing review day and time (choose it in the portal)",
+    "Your structural engineer choice once proposals are in — you'll contract them directly",
+]
+function welcomeKitHtml(k: any) {
+    const p = k.project || {}, c = k.cfg || {}
+    const DAYS = ["", "Mondays", "Tuesdays", "Wednesdays", "Thursdays", "Fridays"]
+    const wkDate = (n: number) => { if (!c.kickoff_on) return ""; const d = new Date(c.kickoff_on + "T12:00:00"); d.setDate(d.getDate() + (n - 1) * 7); return d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) }
+    const PH = ["", "Pre-Design & Site Feasibility", "Schematic Design", "Design Development", "Construction Documents & Permit"]
+    const date = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })
+    const head = (label: string) => `<div class="hd"><span class="wm">FELEMAYE</span><span class="mono">${escH(label)}</span></div>`
+    const foot = (n: number) => `<div class="ft"><span class="mono">${escH(p.title)} · Welcome Kit</span><span class="mono">${n}</span></div>`
+    return PRINT_HEAD(`Welcome Kit · ${p.title}`) + `
+<section class="pg cover"><div class="wm" style="font-size:16pt">FELEMAYE</div>
+<h1 style="margin-top:.5in">Welcome<br>to ${escH(p.title)}</h1>
+<div class="mono" style="margin-top:.2in">${escH(p.address)}</div><div class="rule" style="width:1.4in;background:${BRAND.accent}"></div>
+<div class="mono">Prepared for ${escH(k.clientName)} · ${escH(date)}</div>
+<div class="ft" style="margin-top:auto"><span class="mono">Architectural design studio · Los Angeles</span><span class="mono">felemaye.com</span></div></section>
+
+<section class="pg">${head("A note from the studio")}
+<h2 style="margin-top:.3in">Dear ${escH(String(k.clientName).split(" ")[0])},</h2>
+${String(k.letter || "").split(/\n\n+/).map((t: string) => `<p class="lead" style="font-size:13.5pt;margin:0 0 .16in">${escH(t)}</p>`).join("")}
+<div class="sig">Felema Yemaneberhan</div><div class="mono">Principal · FELEMAYE LLC</div>
+${foot(2)}</section>
+
+<section class="pg">${head("How we'll work together")}
+<h2 style="margin-top:.3in">Our rhythm</h2><p>${escH(String(c.cadence_note || "").replace(/ posted here /, " posted to your portal ").replace(/ update here /, " update to your portal "))}</p>
+<div class="two">
+ <div class="box"><h3 style="margin-top:0">Live reviews</h3><p style="margin:0">At each decision milestone, about every two to three weeks${c.standing_weekday ? `, held on ${DAYS[c.standing_weekday]} at ${escH(c.standing_time)} PT` : ""}. Each review follows the same shape: where we are, the work, and the decisions we make together.</p></div>
+ <div class="box"><h3 style="margin-top:0">Friday progress notes</h3><p style="margin:0">On the weeks between reviews, a short note with images from the studio is posted to your portal every Friday — so you always know where things stand without setting time aside.</p></div>
+ <div class="box"><h3 style="margin-top:0">Your portal</h3><p style="margin:0">Roadmap, presentations, decisions, files and invoices live in one place: <b>${escH(k.portalUrl)}</b>. Notifications appear under “Updates”.</p></div>
+ <div class="box"><h3 style="margin-top:0">Time outside the reviews</h3><p style="margin:0">${escH(c.booking_note || "")}${c.advisory_rate ? ` The current advisory rate is $${Math.round(+c.advisory_rate)} per hour.` : ""}</p></div>
+</div>
+<h3>Reaching the studio</h3><p style="margin:0">${escH(k.contactNote)}</p>
+${foot(3)}</section>
+
+<section class="pg">${head("Your roadmap")}
+<h2 style="margin-top:.3in">Twelve weeks, four phases</h2>
+<table><tr><th>Week</th><th>Phase</th><th>In the studio</th><th>With you</th></tr>
+${(k.weeks || []).map((w: any) => `<tr><td style="white-space:nowrap">${String(w.week_no).padStart(2, "0")} · ${wkDate(w.week_no)}</td><td>${escH(PH[w.phase_seq] || "")}</td><td>${escH(w.title)}</td><td>${escH(w.touchpoint_title || "")}${w.approval_required ? `<br><span style="color:${BRAND.accent}">◆ ${escH(w.approval_required)}</span>` : ""}</td></tr>`).join("")}
+</table>
+${foot(4)}</section>
+
+<section class="pg">${head("What we need from you")}
+<h2 style="margin-top:.3in">To start well</h2><ul class="dash">${(k.needs || []).map((n: string) => `<li>${escH(n)}</li>`).join("")}</ul>
+<p style="margin-top:.16in">Drop anything into the shared folder or the Files tab in your portal${k.dropUrl ? ` (<b>${escH(k.dropUrl)}</b>)` : ""}. Photos from your phone are perfect.</p>
+${(k.team || []).length ? `<h3>Your project team</h3><table><tr><th>Name</th><th>Role</th><th>Contact</th></tr>${k.team.map((t: any) => `<tr><td>${escH(t.full_name)}</td><td>${escH(t.role)}${t.company ? ` · ${escH(t.company)}` : ""}</td><td>${escH(t.email || "")}${t.phone ? ` · ${escH(t.phone)}` : ""}</td></tr>`).join("")}</table>` : ""}
+${k.fees ? `<h3>Fees & milestones</h3><p style="margin:0">${escH(k.fees)}</p>` : ""}
+${foot(5)}</section>` + PRINT_TAIL
+}
+function WelcomeKitEditor({ db, pid, cfg, onClose }: any) {
+    const [k, setK] = React.useState<any>(null)
+    React.useEffect(() => {
+        (async () => {
+            const [{ data: project }, { data: weeks }, { data: team }, { data: budget }] = await Promise.all([
+                db.from("projects").select("title,address,client_id,drive_folder_url").eq("id", pid).maybeSingle(),
+                db.from("project_weeks").select("*").eq("project_id", pid).order("week_no"),
+                db.from("project_directory").select("full_name,role,company,email,phone").eq("project_id", pid).order("seq"),
+                db.from("project_budgets").select("fixed_fee").eq("project_id", pid).maybeSingle(),
+            ])
+            const { data: client } = await db.from("clients").select("name,full_name").eq("client_id", project?.client_id).maybeSingle()
+            const name = client?.full_name || client?.name || "there"
+            setK({
+                project, weeks: weeks || [], team: team || [], cfg, clientName: name,
+                portalUrl: "felemaye.com/client-suite/portal", dropUrl: "",
+                letter: `Thank you for trusting the studio with ${project?.title || "your home"}. While you've been away, the work has already begun: the site is measured, and we've met with LA County Regional Planning to understand exactly what the front yard can hold.\n\nThis kit sets out how we'll work together over the next twelve weeks — when we meet, what you'll receive each Friday, and the few things we need from you to move quickly. Everything lives in your private portal, so you never have to search an inbox for a drawing or a decision.\n\nI'm looking forward to our kickoff on your return.`,
+                needs: KIT_NEEDS.join("\n"),
+                contactNote: "Email felema@felemaye.com for anything project-related. For time outside the scheduled reviews, use the booking link in your portal.",
+                fees: budget?.fixed_fee ? `Fixed design fee $${Number(budget.fixed_fee).toLocaleString()} — retainer, then milestone payments at Schematic Design and Design Development sign-off, as set out in your proposal. Structural engineering is contracted directly between you and the engineer.` : "",
+            })
+        })()
+    }, [db, pid])
+    if (!k) return <Drawer title="Welcome Kit" onClose={onClose}><p className="v4-note">Loading…</p></Drawer>
+    const T = (key: string, label: string, rows = 3) => <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">{label}</span><textarea rows={rows} value={k[key] || ""} onChange={(e) => setK({ ...k, [key]: e.target.value })} /></label>
+    return (
+        <Drawer title="Welcome Kit" onClose={onClose}>
+            <p className="v4-note">Five pages, built from this project's roadmap, cadence and team: cover · letter · how we'll work · roadmap · what we need. Edit the words, then Print / PDF and add it to the client's Files (00 · Agreements).</p>
+            <div className="v4-grid" style={{ gridTemplateColumns: "1fr 1fr" }}>
+                <label className="v4-field"><span className="mono">Client name</span><input value={k.clientName} onChange={(e) => setK({ ...k, clientName: e.target.value })} /></label>
+                <label className="v4-field"><span className="mono">Shared drop folder (optional)</span><input value={k.dropUrl} onChange={(e) => setK({ ...k, dropUrl: e.target.value })} placeholder="Client-only Drive folder link" /></label>
+            </div>
+            {T("letter", "Letter", 9)}{T("needs", "What we need (one per line)", 6)}{T("contactNote", "Reaching the studio", 3)}{T("fees", "Fees & milestones", 3)}
+            <div className="r" style={{ marginTop: 14 }}><button className="b" onClick={() => openPrint(welcomeKitHtml({ ...k, needs: lines(k.needs) }))}>Print / PDF</button></div>
         </Drawer>
     )
 }
@@ -5841,6 +6103,7 @@ function CadenceSettings({ db, pid, cfg, booking, reload, setMsg, schedule }: an
     const [c, setC] = React.useState<any>(cfg || { kickoff_on: new Date().toISOString().slice(0, 10), weeks: 12, included_sessions: 5 })
     const [b, setB] = React.useState(booking || "")
     const [adv, setAdv] = React.useState(false)
+    const [kit, setKit] = React.useState(false)
     React.useEffect(() => { if (cfg) setC(cfg) }, [cfg])
     React.useEffect(() => { setB(booking || "") }, [booking])
     async function save() {
@@ -5862,7 +6125,8 @@ function CadenceSettings({ db, pid, cfg, booking, reload, setMsg, schedule }: an
             <label className="v4-field"><span className="mono">Dedicated client booking link (not your public discovery link)</span><input value={b} onChange={(e) => setB(e.target.value)} placeholder="Calendly / TidyCal event: Project Lorado — Phase Review / Advisory Touchpoint (45 min)" /></label>
             <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Cadence note shown to the client</span><textarea rows={4} value={c.cadence_note || ""} onChange={(e) => setC({ ...c, cadence_note: e.target.value })} /></label>
             <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Booking boundary note</span><textarea rows={3} value={c.booking_note || ""} onChange={(e) => setC({ ...c, booking_note: e.target.value })} /></label>
-            <div className="r" style={{ marginTop: 14 }}><button className="b" onClick={save}>Save settings</button><button className="b g" onClick={() => setAdv(true)}>Log an advisory call</button></div>
+            <div className="r" style={{ marginTop: 14 }}><button className="b" onClick={save}>Save settings</button><button className="b g" onClick={() => setAdv(true)}>Log an advisory call</button><button className="b g" onClick={() => setKit(true)}>Welcome Kit</button></div>
+            {kit && <WelcomeKitEditor db={db} pid={pid} cfg={c} onClose={() => setKit(false)} />}
             {adv && <ScheduleForm w={null} onClose={() => setAdv(false)} onSave={(w: any, ...rest: any[]) => { setAdv(false); (schedule as any)(null, ...rest) }} />}
         </div>
     )
@@ -5892,6 +6156,63 @@ function StudioInbox({ db }: any) {
                 </div>
             ))}
             {!rows.length && <p className="v4-note">Nothing yet. Client choices, sign-offs, meeting requests and completed tasks land here.</p>}
+        </div>
+    )
+}
+
+/* ───────────── Consultant directory (2026-10-22c) ─────────────
+   Shortlist with websites, service area, stated lead times and notes. "To vet" means researched
+   online only — confirm licence (CA BPELSG lookup), availability and fee on the first call. */
+const VET = ["to_vet", "contacted", "vetted", "warm", "declined"]
+const VET_TONE: any = { to_vet: "var(--slate)", contacted: "var(--ochre)", vetted: "var(--moss)", warm: "var(--moss)", declined: "#666" }
+function ConsultantDirectory({ db, cons, reload }: any) {
+    const [disc, setDisc] = React.useState("all")
+    const [editing, setEditing] = React.useState<string | null>(null)
+    const list = cons.filter((c: any) => disc === "all" || c.discipline === disc)
+    const discs = Array.from(new Set(cons.map((c: any) => c.discipline))) as string[]
+    async function patch(c: any, p: any) { await db.from("consultants").update(p).eq("id", c.id); reload() }
+    const intro = (c: any) => {
+        const subj = `Introduction — FELEMAYE · 3745 Lorado Way, View Park (front-yard courtyard wall)`
+        const body = `Hello${c.contact_name ? " " + c.contact_name.split(" ")[0] : ""},\n\nI'm Felema Yemaneberhan, principal of FELEMAYE LLC, an architectural design studio in Los Angeles. I'm leading the design of a front-yard courtyard enclosure at 3745 Lorado Way in View Park (unincorporated LA County, R-1): a masonry base with ornamental iron above, new pilasters and gate, roughly 1,500 sq ft of front yard.\n\nWe're in pre-design and expect to need ${c.discipline === "structural" ? "an Engineer of Record for footing, masonry and seismic calculations with stamped S-sheets for LA County Building & Safety" : c.discipline === "survey" ? "a boundary and topographic survey to fix the front property line and grades" : c.discipline === "civil" ? "grading and drainage input if the County requires it" : "engineering input on exterior lighting and power"}. The client contracts directly; FELEMAYE coordinates and remains lead designer.\n\nWould you have capacity in the next 4–6 weeks, and could you share your typical fee range and turnaround for a scope like this?\n\nThank you,\nFelema Yemaneberhan\nFELEMAYE LLC · felema@felemaye.com`
+        return `mailto:${c.email || ""}?subject=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`
+    }
+    return (
+        <div className="c v4-panel">
+            <div className="r" style={{ justifyContent: "space-between" }}>
+                <div><div className="mono">Consultant directory</div><div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Researched shortlist + your warm contacts. Verify each licence at bpelsg.ca.gov before engaging.</div></div>
+                <div className="r">{["all", ...discs].map((d) => <button key={d} className={"b" + (disc === d ? "" : " g")} onClick={() => setDisc(d)}>{d}</button>)}</div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(320px,1fr))", gap: 12, marginTop: 12 }}>
+                {list.map((c: any) => (
+                    <div key={c.id} className="c" style={{ margin: 0, borderTop: `3px solid ${VET_TONE[c.vetting_status || "to_vet"]}` }}>
+                        <div className="r" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                            <div style={{ minWidth: 0 }}><span className="tag">{c.discipline}</span><div style={{ fontSize: 16, fontWeight: 600, marginTop: 6 }}>{c.firm}</div>{c.contact_name && <div style={{ fontSize: 13, opacity: 0.75 }}>{c.contact_name}</div>}</div>
+                            <select value={c.vetting_status || "to_vet"} onChange={(e) => patch(c, { vetting_status: e.target.value })} aria-label="Vetting status" style={{ fontSize: 13 }}>{VET.map((v) => <option key={v} value={v}>{v.replace("_", " ")}</option>)}</select>
+                        </div>
+                        {c.service_area && <div style={{ fontSize: 13, marginTop: 6, opacity: 0.8 }}>📍 {c.service_area}</div>}
+                        {c.lead_time_note && <div style={{ fontSize: 13, marginTop: 4 }}><span className="mono">Lead time · </span>{c.lead_time_note}</div>}
+                        {c.notes && <p style={{ fontSize: 13, lineHeight: 1.55, margin: "8px 0", opacity: 0.85 }}>{c.notes}</p>}
+                        <div className="r" style={{ gap: 12, fontSize: 13 }}>
+                            {c.website && <a href={c.website} target="_blank" rel="noreferrer">Website ↗</a>}
+                            {c.phone && <a href={"tel:" + c.phone.replace(/[^\d+]/g, "")}>{c.phone}</a>}
+                            {c.source_url && c.source_url !== c.website && <a href={c.source_url} target="_blank" rel="noreferrer" style={{ opacity: 0.7 }}>Source ↗</a>}
+                        </div>
+                        <div className="r" style={{ marginTop: 10 }}>
+                            <a className="b" href={intro(c)} style={{ textDecoration: "none" }} onClick={() => (c.vetting_status || "to_vet") === "to_vet" && patch(c, { vetting_status: "contacted" })}>Email intro</a>
+                            <button className="b g" onClick={() => setEditing(editing === c.id ? null : c.id)}>{editing === c.id ? "Done" : "Edit"}</button>
+                        </div>
+                        {editing === c.id && (
+                            <div className="v4-grid" style={{ gridTemplateColumns: "1fr 1fr", marginTop: 10 }}>
+                                {(["contact_name", "email", "phone", "license_no", "lead_time_note", "website"] as const).map((k) => (
+                                    <label className="v4-field" key={k}><span className="mono">{k.replace("_", " ")}</span><input defaultValue={c[k] || ""} onBlur={(e) => e.target.value !== (c[k] || "") && patch(c, { [k]: e.target.value || null })} /></label>
+                                ))}
+                                <label className="v4-field" style={{ gridColumn: "1 / -1" }}><span className="mono">notes</span><textarea rows={3} defaultValue={c.notes || ""} onBlur={(e) => e.target.value !== (c.notes || "") && patch(c, { notes: e.target.value })} /></label>
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+            {!list.length && <p className="v4-note">No consultants yet — run 20261022c SQL to load the researched shortlist.</p>}
         </div>
     )
 }

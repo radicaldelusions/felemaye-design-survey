@@ -2108,28 +2108,30 @@ function Directory({ project, db }: any) {
    dedicated client booking link with clear scope boundaries. Needs 20261022b SQL; every
    block hides itself quietly when its table isn't there yet. */
 const CAD_CSS = `
-.fyp .cad-wk{display:grid;grid-template-columns:76px minmax(0,1fr) auto;gap:18px;padding:16px 0;border-top:1px solid var(--line);align-items:start}
+.fyp .cad-wk{display:grid;grid-template-columns:96px minmax(0,1fr) auto;gap:18px;padding:16px 0;border-top:1px solid var(--line);align-items:start}
 .fyp .cad-wk[data-now=true]{background:linear-gradient(90deg,color-mix(in srgb,var(--accent) 10%,transparent),transparent 70%);margin:0 -12px;padding:16px 12px}
-.fyp .cad-wk .n{font:400 30px/1 'Cormorant Garamond',Georgia,serif;color:var(--accent)}
-.fyp .cad-wk .n small{display:block;font:10px ui-monospace,Menlo,monospace;letter-spacing:.14em;color:var(--ink);opacity:.55;margin-top:6px;text-transform:uppercase}
-.fyp .cad-tag{display:inline-flex;align-items:center;gap:6px;font:600 9px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;padding:4px 8px;border:1px solid var(--line);white-space:nowrap}
+.fyp .cad-wk .n{font:400 40px/1 'Cormorant Garamond',Georgia,serif;color:var(--accent)}
+.fyp .cad-wk .n small{display:block;font:500 13px/1.3 ui-monospace,Menlo,monospace;letter-spacing:.08em;color:var(--ink);opacity:.8;margin-top:8px;text-transform:uppercase}
+.fyp .cad .t1{font-size:19px;line-height:1.35}.fyp .cad .t2{font-size:15px;line-height:1.55;opacity:.8;margin-top:4px}.fyp .cad .mono{font-size:12px;opacity:.75}.fyp .cad p{font-size:15px}
+.fyp .cad-tag{display:inline-flex;align-items:center;gap:6px;font:600 11px ui-monospace,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;padding:4px 8px;border:1px solid var(--line);white-space:nowrap}
 .fyp .cad-tag[data-k=live]{border-color:var(--accent);color:var(--accent)}.fyp .cad-tag[data-k=async]{color:var(--slate);border-color:var(--slate)}
 .fyp .cad-tag[data-k=done]{color:var(--sage);border-color:var(--sage)}
 .fyp .cad-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
 .fyp .bell{position:relative}.fyp .bell b{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#0B0B0C;font:700 10px/18px ui-monospace,Menlo,monospace;text-align:center;padding:0 4px}
-.fyp .ntf{position:absolute;right:0;top:calc(100% + 8px);width:min(380px,calc(100vw - 28px));z-index:20;background:#121214;border:1px solid var(--line);box-shadow:0 18px 50px rgba(0,0,0,.6);max-height:70vh;overflow:auto}
-.fyp .ntf button.it{all:unset;box-sizing:border-box;display:grid;grid-template-columns:8px minmax(0,1fr);gap:12px;width:100%;padding:14px 16px;border-top:1px solid var(--line);cursor:pointer}
+.fyp .ntf{position:absolute;right:0;top:calc(100% + 8px);width:min(420px,calc(100vw - 28px));z-index:20;background:var(--paper);color:var(--ink);border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);box-shadow:0 18px 50px rgba(0,0,0,.18);max-height:70vh;overflow:auto;text-align:left}
+.fyp .ntf button.it{all:unset;box-sizing:border-box;display:grid;grid-template-columns:8px minmax(0,1fr);gap:12px;width:100%;padding:16px 18px;border-top:1px solid color-mix(in srgb,var(--ink) 12%,transparent);cursor:pointer;color:var(--ink)}
 .fyp .ntf button.it:hover,.fyp .ntf button.it:focus-visible{background:color-mix(in srgb,var(--accent) 8%,transparent)}
 .fyp .cad a:not(.btn),.fyp .ovl a:not(.btn){color:inherit}
-.fyp .ovl{position:fixed;inset:0;z-index:60;background:rgba(6,6,7,.92);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);display:flex;flex-direction:column}
-.fyp .ovl .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px clamp(14px,3vw,28px);border-bottom:1px solid var(--line)}
+.fyp .ovl{position:fixed;inset:0;z-index:60;background:var(--paper);color:var(--ink);display:flex;flex-direction:column}
+.fyp .ovl .bar{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:14px clamp(14px,3vw,28px);border-bottom:1px solid color-mix(in srgb,var(--ink) 15%,transparent);background:var(--paper)}
+.fyp .ovl .btn.ghost{color:var(--ink);border-color:color-mix(in srgb,var(--ink) 35%,transparent)}
 .fyp .ovl .bar .btn{white-space:nowrap;flex:none}
 .fyp .ovl .body{flex:1;overflow:auto;padding:clamp(16px,4vw,48px)}
 .fyp .ag-part{display:grid;grid-template-columns:110px minmax(0,1fr);gap:20px;padding:22px 0;border-top:1px solid var(--line)}
 .fyp .ag-part .m{font:400 34px/1 'Cormorant Garamond',Georgia,serif;color:var(--accent)}
 .fyp .slide{position:relative;flex:1;display:grid;place-items:center;min-height:0}
-.fyp .slide img{max-width:100%;max-height:calc(100vh - 220px);object-fit:contain;box-shadow:0 30px 80px rgba(0,0,0,.55)}
-.fyp .opt{border:1px solid var(--line);padding:20px;display:grid;gap:10px;align-content:start}
+.fyp .slide img{max-width:100%;max-height:calc(100vh - 220px);object-fit:contain;box-shadow:0 24px 60px rgba(0,0,0,.18)}
+.fyp .opt{border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);padding:20px;display:grid;gap:10px;align-content:start}
 .fyp .opt[data-on=true]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .fyp .opt ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6;opacity:.85}
 @media(max-width:700px){.fyp .cad-wk{grid-template-columns:52px minmax(0,1fr)}.fyp .cad-wk>:last-child{grid-column:2}.fyp .ag-part{grid-template-columns:1fr;gap:8px}.fyp .cad-wk .n{font-size:24px}}
@@ -2141,9 +2143,9 @@ function Overlay({ children }: any) {
     return createPortal(<div className="fyp" style={{ minHeight: 0, background: "transparent" }}><style>{CAD_CSS}</style>{children}</div>, document.body)
 }
 const AGENDA_PARTS = [
-    { key: "context", title: "Context & retrospective", minutes: 10, items: ["What the studio completed since our last session", "How this milestone answers your goals for the courtyard"] },
-    { key: "present", title: "Visual presentation & deliverables", minutes: 25, items: ["Curated presentation, never raw model files", "Decision points shown side by side: Option A vs Option B, with cost, code and aesthetic trade-offs"] },
-    { key: "approve", title: "Formal approval & next steps", minutes: 10, items: ["Your sign-off in the portal before the next phase begins", "Confirm the date of the next milestone review"] },
+    { key: "context", title: "Where we are", items: ["What the studio has completed since we last met", "How this milestone serves your goals for the courtyard"] },
+    { key: "present", title: "The work", items: ["A short presentation of the design", "Any options side by side, with cost, code and design trade-offs"] },
+    { key: "approve", title: "Decisions & next steps", items: ["Your decision and sign-off in the portal", "Confirm the date of our next review"] },
 ]
 const wkStart = (kick: string, n: number) => { const d = new Date(kick + "T12:00:00"); d.setDate(d.getDate() + (n - 1) * 7); return d }
 const fmtD = (d: Date, o: any = { month: "short", day: "numeric" }) => d.toLocaleDateString("en-US", o)
@@ -2215,9 +2217,9 @@ function NotificationBell({ db, project, go }: any) {
                         <button key={r.id} className="it" onClick={() => { setOpen(false); if (r.link_target) go(r.link_target) }}>
                             <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, background: r.read_at ? "transparent" : "var(--accent)", border: "1px solid var(--accent)" }} />
                             <span style={{ minWidth: 0 }}>
-                                <span style={{ display: "block", fontSize: 14, lineHeight: 1.4 }} className="brk">{r.title}</span>
-                                {r.body && <span style={{ display: "block", fontSize: 12, opacity: 0.65, marginTop: 3, lineHeight: 1.5 }} className="brk">{r.body}</span>}
-                                <span className="mono" style={{ display: "block", marginTop: 6, fontSize: 9 }}>{ago(r.created_at)}</span>
+                                <span style={{ display: "block", fontSize: 15.5, lineHeight: 1.4 }} className="brk">{r.title}</span>
+                                {r.body && <span style={{ display: "block", fontSize: 13.5, opacity: 0.75, marginTop: 4, lineHeight: 1.5 }} className="brk">{r.body}</span>}
+                                <span className="mono" style={{ display: "block", marginTop: 6, fontSize: 11 }}>{ago(r.created_at)}</span>
                             </span>
                         </button>
                     ))}
@@ -2232,12 +2234,11 @@ function NotificationBell({ db, project, go }: any) {
 function AgendaView({ a, ev, week, onClose }: any) {
     React.useEffect(() => { const k = (e: KeyboardEvent) => e.key === "Escape" && onClose(); window.addEventListener("keydown", k); return () => window.removeEventListener("keydown", k) }, [onClose])
     const parts = (a?.parts?.length ? a.parts : AGENDA_PARTS) as any[]
-    const total = parts.reduce((s, p) => s + (+p.minutes || 0), 0)
     const when = ev ? new Date(ev.starts_at) : null
     const cl = ev ? calLinks(ev) : null
     return (
         <Overlay><div className="ovl" role="dialog" aria-modal="true" aria-label="Meeting agenda">
-            <div className="bar"><span className="mono">Agenda · {total} minutes</span><button className="btn ghost" onClick={onClose}>Close ✕</button></div>
+            <div className="bar"><span className="mono">Agenda</span><button className="btn ghost" onClick={onClose}>Close ✕</button></div>
             <div className="body"><div style={{ maxWidth: 880, margin: "0 auto" }}>
                 <div className="mono" style={{ color: "var(--accent)", opacity: 1 }}>{week ? `Week ${week.week_no} · ${week.touchpoint_title || week.title}` : "Milestone review"}</div>
                 <h2 style={{ fontSize: "clamp(32px,5vw,52px)", margin: "10px 0 8px" }}>{a?.title || week?.title}</h2>
@@ -2250,10 +2251,10 @@ function AgendaView({ a, ev, week, onClose }: any) {
                 <div style={{ marginTop: 30 }}>
                     {parts.map((p, i) => (
                         <div key={p.key || i} className="ag-part">
-                            <div><div className="m">{p.minutes}′</div><div className="mono" style={{ marginTop: 6 }}>Part {i + 1}</div></div>
+                            <div><div className="m">{["I", "II", "III", "IV", "V", "VI"][i] || i + 1}</div></div>
                             <div>
                                 <h3 style={{ fontSize: 24, margin: "0 0 8px" }}>{p.title}</h3>
-                                <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8, fontSize: 15, opacity: 0.85 }}>{(p.items || []).map((it: string) => <li key={it}>{it}</li>)}</ul>
+                                <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8, fontSize: 17, opacity: 0.9 }}>{(p.items || []).map((it: string) => <li key={it}>{it}</li>)}</ul>
                             </div>
                         </div>
                     ))}
@@ -2292,7 +2293,7 @@ function ScheduleHub({ p, project, db, go }: any) {
     const agendaFor = (ev: any) => c.agendas.find((a: any) => a.event_id === ev?.id) || null
     const days = nextEv ? Math.ceil((new Date(nextEv.starts_at).getTime() - now) / 864e5) : null
     const fri = (() => { const d = new Date(); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7)); return d })()
-    if (!c.ready) return <div className="card cad"><div className="mono">4 · Schedule & meetings</div><p style={{ opacity: 0.6, fontSize: 13 }}>Loading your schedule…</p></div>
+    if (!c.ready) return <div className="card cad"><div className="mono">4 · Schedule & meetings</div><p style={{ opacity: 0.6, fontSize: 15 }}>Loading your schedule…</p></div>
     return (
         <div className="card cad">
             <style>{CAD_CSS}</style>
@@ -2304,9 +2305,9 @@ function ScheduleHub({ p, project, db, go }: any) {
                 <div style={{ marginTop: 14 }}>
                     <div className="mono">Next session{days != null && days >= 0 ? ` · ${days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}` : ""}</div>
                     <h2 style={{ fontSize: 30, margin: "8px 0 4px" }} className="brk">{nextEv.title}</h2>
-                    <p style={{ margin: 0, fontSize: 14, opacity: 0.8 }}>{fmtD(new Date(nextEv.starts_at), { weekday: "long", month: "long", day: "numeric" })} · {new Date(nextEv.starts_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} PT</p>
+                    <p style={{ margin: 0, fontSize: 16, opacity: 0.8 }}>{fmtD(new Date(nextEv.starts_at), { weekday: "long", month: "long", day: "numeric" })} · {new Date(nextEv.starts_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} PT</p>
                     <div className="row" style={{ gap: 10, marginTop: 14 }}>
-                        <button className="btn" onClick={() => setAgenda({ a: agendaFor(nextEv), ev: nextEv, week: c.weeks.find((w: any) => w.event_id === nextEv.id) || nextLive })}>View agenda</button>
+                        <button className="btn" onClick={() => setAgenda({ a: agendaFor(nextEv), ev: nextEv, week: c.weeks.find((w: any) => w.event_id === nextEv.id) || c.weeks.find((w: any) => w.week_no === agendaFor(nextEv)?.week_no) || nextLive })}>View agenda</button>
                         {nextEv.video_url && <a className="btn ghost" href={nextEv.video_url} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Join ↗</a>}
                         <a className="btn ghost" href={calLinks(nextEv).g} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Add to calendar</a>
                     </div>
@@ -2315,34 +2316,37 @@ function ScheduleHub({ p, project, db, go }: any) {
                 <div style={{ marginTop: 14 }}>
                     <div className="mono">Next milestone review</div>
                     <h2 style={{ fontSize: 28, margin: "8px 0 4px" }}>{nextLive.touchpoint_title}</h2>
-                    <p style={{ margin: 0, fontSize: 14, opacity: 0.8 }}>Week {nextLive.week_no} · week of {fmtD(wkStart(c.cfg.kickoff_on, nextLive.week_no), { month: "long", day: "numeric" })}. The studio will send the exact time.</p>
+                    <p style={{ margin: 0, fontSize: 16, opacity: 0.8 }}>Week {nextLive.week_no} · week of {fmtD(wkStart(c.cfg.kickoff_on, nextLive.week_no), { month: "long", day: "numeric" })}. The studio will send the exact time.</p>
                     <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setAgenda({ a: null, ev: null, week: nextLive })}>Preview the agenda</button>
                 </div>
             ) : null}
 
             <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
                 <div className="row" style={{ justifyContent: "space-between" }}>
-                    <div className="mono">Friday studio update</div>
+                    <div className="mono">Friday progress note</div>
                     {!latest || new Date(latest.published_at).getTime() < now - 6 * 864e5 ? <span className="mono" style={{ fontSize: 9 }}>Next · {fmtD(fri, { weekday: "long", month: "short", day: "numeric" })}</span> : null}
                 </div>
                 {latest ? (
                     <div style={{ marginTop: 8 }}>
-                        <div style={{ fontSize: 16 }} className="brk">{latest.title}</div>
-                        {latest.body && <p style={{ fontSize: 13.5, lineHeight: 1.7, opacity: 0.8, margin: "6px 0 0", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{latest.body}</p>}
+                        {(latest.images || [])[0] && <div style={{ aspectRatio: "16/9", overflow: "hidden", margin: "6px 0 10px", background: "color-mix(in srgb,var(--ink) 6%,transparent)" }}><SlideThumb db={db} s={latest.images[0]} /></div>}
+                        <div style={{ fontSize: 18 }} className="brk">{latest.title}</div>
+                        {latest.body && <p style={{ fontSize: 15.5, lineHeight: 1.7, opacity: 0.8, margin: "6px 0 0", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{latest.body}</p>}
                         <div className="row" style={{ gap: 14, marginTop: 8 }}>
-                            {latest.video_url && <a className="mono" href={latest.video_url} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "6px 0" }}>Watch the update ↗</a>}
+                            {latest.video_url && <a className="mono" href={latest.video_url} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "6px 0" }}>Watch ↗</a>}
                             {latest.file_path && <FileLink db={db} path={latest.file_path} label="Progress note (PDF)" />}
                             <a className="mono" onClick={() => go("roadmap")} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>All updates →</a>
                         </div>
                     </div>
-                ) : <p style={{ fontSize: 13, opacity: 0.65, margin: "8px 0 0" }}>Your first studio update arrives on {fmtD(fri, { weekday: "long", month: "long", day: "numeric" })}.</p>}
+                ) : <p style={{ fontSize: 15, opacity: 0.75, margin: "8px 0 0" }}>Your first progress note arrives on {fmtD(fri, { weekday: "long", month: "long", day: "numeric" })}.</p>}
             </div>
 
-            {W && W.touchpoint !== "live" && <p style={{ fontSize: 13, opacity: 0.7, margin: "16px 0 0", lineHeight: 1.6 }}><span className="mono" style={{ display: "block", marginBottom: 4 }}>This week in the studio</span>{W.title}</p>}
+            {W && W.touchpoint !== "live" && <p style={{ fontSize: 15, opacity: 0.7, margin: "16px 0 0", lineHeight: 1.6 }}><span className="mono" style={{ display: "block", marginBottom: 4 }}>This week in the studio</span>{W.title}</p>}
+
+            <StandingSlot db={db} project={project} cfg={c.cfg} reload={c.reload} />
 
             <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
                 <div className="mono">Book time with Felema</div>
-                <p style={{ fontSize: 13, lineHeight: 1.7, opacity: 0.75, margin: "6px 0 10px" }}>{c.cfg?.booking_note || "Milestone reviews are included in your scope. Additional consultations are billed at the studio's hourly advisory rate."}{c.cfg?.advisory_rate ? ` (${usd(c.cfg.advisory_rate)}/hr)` : ""}</p>
+                <p style={{ fontSize: 15, lineHeight: 1.7, opacity: 0.75, margin: "6px 0 10px" }}>{c.cfg?.booking_note || "Milestone reviews are included in your scope. Additional consultations are billed at the studio's hourly advisory rate."}{c.cfg?.advisory_rate ? ` Current advisory rate: $${Math.round(+c.cfg.advisory_rate)} per hour.` : ""}</p>
                 {bookingUrl ? (
                     <>
                         <div className="row" style={{ gap: 10 }}>
@@ -2355,6 +2359,51 @@ function ScheduleHub({ p, project, db, go }: any) {
                 {bookingUrl && <a className="mono" onClick={() => go("meet")} style={{ display: "inline-block", marginTop: 12, textDecoration: "underline", cursor: "pointer" }}>Prefer to suggest times? Request a meeting →</a>}
             </div>
             {agenda && <AgendaView a={agenda.a} ev={agenda.ev} week={agenda.week} onClose={() => setAgenda(null)} />}
+        </div>
+    )
+}
+
+/* ── Standing review time: the client picks one weekday + time; reviews (every 2–3 weeks) land there ── */
+const SLOT_OPTS = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"]
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+function StandingSlot({ db, project, cfg, reload }: any) {
+    const [edit, setEdit] = React.useState(false)
+    const [day, setDay] = React.useState<number>(cfg?.standing_weekday || 0)
+    const [time, setTime] = React.useState<string>(cfg?.standing_time || "10:00")
+    const [note, setNote] = React.useState("")
+    const [msg, setMsg] = React.useState("")
+    if (!cfg) return null
+    const set = !!cfg.standing_weekday && !edit
+    async function save() {
+        if (!day) return setMsg("Choose a day.")
+        const { error } = await db.rpc("client_set_standing_slot", { p_project: project.id, p_weekday: day, p_time: time, p_note: note || null })
+        if (error) setMsg("Couldn't save that. Please try again."); else { setMsg(""); setEdit(false); reload() }
+    }
+    return (
+        <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
+            <div className="mono">Your standing review time</div>
+            {set ? (
+                <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
+                    <div style={{ fontSize: 18 }}>{DAYS[cfg.standing_weekday - 1]}s at {fmtTime(cfg.standing_time)} PT</div>
+                    <a className="mono" onClick={() => setEdit(true)} style={{ textDecoration: "underline", cursor: "pointer" }}>Change</a>
+                </div>
+            ) : (
+                <>
+                    <p style={{ fontSize: 15, lineHeight: 1.65, opacity: 0.8, margin: "6px 0 10px" }}>Reviews happen every two to three weeks. Choose the weekday and time that suits you best, and we'll hold it for each one.</p>
+                    <div className="row" style={{ gap: 8 }} role="group" aria-label="Weekday">
+                        {DAYS.map((d, i) => <button key={d} className={"btn" + (day === i + 1 ? "" : " ghost")} aria-pressed={day === i + 1} onClick={() => setDay(i + 1)} style={{ padding: "10px 14px" }}>{d.slice(0, 3)}</button>)}
+                    </div>
+                    <select aria-label="Time" value={time} onChange={(e) => setTime(e.target.value)} style={{ marginTop: 10 }}>
+                        {SLOT_OPTS.map((t) => <option key={t} value={t}>{fmtTime(t)} PT</option>)}
+                    </select>
+                    <input placeholder="Anything we should know (optional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} style={{ marginTop: 6 }} />
+                    <div className="row" style={{ marginTop: 12 }}>
+                        <button className="btn" onClick={save}>Save my review time</button>
+                        {edit && <button className="btn ghost" onClick={() => setEdit(false)}>Cancel</button>}
+                    </div>
+                    {msg && <p role="status" style={{ fontSize: 13 }}>{msg}</p>}
+                </>
+            )}
         </div>
     )
 }
@@ -2373,10 +2422,10 @@ function CadenceTimeline({ project, db }: any) {
             <style>{CAD_CSS}</style>
             <div className="mono">Your 12-week rhythm</div>
             <h2 style={{ fontSize: "clamp(28px,4vw,40px)", margin: "8px 0 8px" }}>How we'll work together</h2>
-            <p style={{ opacity: 0.75, fontSize: 14, lineHeight: 1.75, maxWidth: 680, margin: "0 0 14px" }}>{c.cfg.cadence_note}</p>
+            <p style={{ opacity: 0.75, fontSize: 16, lineHeight: 1.75, maxWidth: 680, margin: "0 0 14px" }}>{c.cfg.cadence_note}</p>
             <div className="row" style={{ gap: 10, marginBottom: 8 }}>
-                <span className="cad-tag" data-k="live"><span className="cad-dot" />Live review · 45 min</span>
-                <span className="cad-tag" data-k="async"><span className="cad-dot" />Friday update</span>
+                <span className="cad-tag" data-k="live"><span className="cad-dot" />Live review</span>
+                <span className="cad-tag" data-k="async"><span className="cad-dot" />Friday progress note</span>
             </div>
             {c.weeks.map((w: any) => {
                 const ev = c.events.find((e: any) => e.id === w.event_id)
@@ -2390,21 +2439,22 @@ function CadenceTimeline({ project, db }: any) {
                         <div className="cad-wk" data-now={week === w.week_no} style={{ opacity: past ? 0.62 : 1 }}>
                             <div className="n">{String(w.week_no).padStart(2, "0")}<small>{fmtD(wkStart(c.cfg.kickoff_on, w.week_no))}</small></div>
                             <div style={{ minWidth: 0 }}>
-                                <div style={{ fontSize: 16 }}>{w.title}{week === w.week_no && <span className="mono" style={{ marginLeft: 10, color: "var(--accent)", opacity: 1 }}>· this week</span>}</div>
-                                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>{w.touchpoint_title}</div>
-                                {w.presentation && <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Presentation · {w.presentation}</div>}
-                                {(w.deliverables || []).length > 0 && <div style={{ fontSize: 13, opacity: 0.7, marginTop: 4 }}>Deliverables · {w.deliverables.join(" · ")}</div>}
-                                {w.approval_required && <div style={{ fontSize: 13, marginTop: 6, color: "var(--accent)" }}>◆ Your approval: {w.approval_required}</div>}
+                                <div className="t1">{w.title}{week === w.week_no && <span className="mono" style={{ marginLeft: 10, color: "var(--accent)", opacity: 1 }}>· this week</span>}</div>
+                                <div className="t2">{w.touchpoint_title}</div>
+                                {w.presentation && <div className="t2">Presentation · {w.presentation}</div>}
+                                {(w.deliverables || []).length > 0 && <div className="t2">Deliverables · {w.deliverables.join(" · ")}</div>}
+                                {w.approval_required && <div className="t2" style={{ color: "var(--accent)", opacity: 1 }}>◆ Your approval: {w.approval_required}</div>}
                                 <div className="row" style={{ gap: 14, marginTop: 6 }}>
                                     {w.touchpoint === "live" && <a className="mono" onClick={() => setAgenda({ a: ag, ev, week: w })} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>Agenda</a>}
                                     {ev && <a className="mono" href={calLinks(ev).g} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "6px 0" }}>{fmtD(new Date(ev.starts_at), { weekday: "short", month: "short", day: "numeric" })} · add to calendar ↗</a>}
-                                    {ups.map((u: any) => <a key={u.id} className="mono" onClick={() => setOpenUpd(openUpd === u.id ? null : u.id)} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>{openUpd === u.id ? "Hide update" : "Friday update"}</a>)}
+                                    {ups.map((u: any) => <a key={u.id} className="mono" onClick={() => setOpenUpd(openUpd === u.id ? null : u.id)} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>{openUpd === u.id ? "Hide note" : "Progress note"}</a>)}
                                 </div>
                                 {ups.filter((u: any) => u.id === openUpd).map((u: any) => (
                                     <div key={u.id} style={{ marginTop: 8, padding: "12px 14px", borderLeft: "2px solid var(--slate)", background: "color-mix(in srgb,var(--slate) 8%,transparent)" }}>
-                                        <div style={{ fontSize: 15 }}>{u.title}</div>
-                                        {u.body && <p style={{ whiteSpace: "pre-wrap", fontSize: 13.5, lineHeight: 1.7, opacity: 0.85, margin: "6px 0 0" }}>{u.body}</p>}
-                                        {(u.highlights || []).length > 0 && <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 13, lineHeight: 1.7 }}>{u.highlights.map((h: string) => <li key={h}>{h}</li>)}</ul>}
+                                        <div style={{ fontSize: 17 }}>{u.title}</div>
+                                        {(u.images || []).length > 0 && <NoteImages db={db} imgs={u.images} />}
+                                        {u.body && <p style={{ whiteSpace: "pre-wrap", fontSize: 15.5, lineHeight: 1.7, opacity: 0.85, margin: "6px 0 0" }}>{u.body}</p>}
+                                        {(u.highlights || []).length > 0 && <ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 15, lineHeight: 1.7 }}>{u.highlights.map((h: string) => <li key={h}>{h}</li>)}</ul>}
                                         {u.next_up && <p className="mono" style={{ marginTop: 8 }}>Next · {u.next_up}</p>}
                                         <div className="row" style={{ gap: 14 }}>{u.video_url && <a className="mono" href={u.video_url} target="_blank" rel="noopener" style={{ textDecoration: "underline", padding: "6px 0" }}>Watch ↗</a>}{u.file_path && <FileLink db={db} path={u.file_path} label="PDF note" />}</div>
                                     </div>
@@ -2510,7 +2560,7 @@ function Presentations({ project, db }: any) {
                 const cover = (pr.slides || [])[0]
                 return (
                     <div key={pr.id} style={{ display: "grid", gridTemplateColumns: "120px minmax(0,1fr) auto", gap: 16, alignItems: "center", padding: "14px 0", borderTop: LINE }}>
-                        <div style={{ aspectRatio: "4/3", background: "#141416", overflow: "hidden", display: "grid", placeItems: "center" }}>{cover ? <span style={{ width: "100%", height: "100%", display: "block" }}><SlideThumb db={db} s={cover} /></span> : <span className="mono" style={{ fontSize: 9 }}>Deck</span>}</div>
+                        <div style={{ aspectRatio: "4/3", background: "color-mix(in srgb,var(--ink) 7%,transparent)", overflow: "hidden", display: "grid", placeItems: "center" }}>{cover ? <span style={{ width: "100%", height: "100%", display: "block" }}><SlideThumb db={db} s={cover} /></span> : <span className="mono" style={{ fontSize: 9 }}>Deck</span>}</div>
                         <div style={{ minWidth: 0 }}>
                             <div style={{ fontSize: 16 }} className="brk">{pr.title}</div>
                             <div className="mono" style={{ marginTop: 4 }}>{pr.published_at ? fmtD(new Date(pr.published_at)) : ""}{(pr.slides || []).length ? ` · ${pr.slides.length} slides` : ""}{(pr.options || []).length ? ` · ${pr.options.length} options` : ""}</div>
@@ -2521,6 +2571,18 @@ function Presentations({ project, db }: any) {
                 )
             })}
             {open && <PresentationViewer db={db} pres={open} decided={decisionFor(open.id)} onClose={() => setOpen(null)} onDecided={c.reload} />}
+        </div>
+    )
+}
+function NoteImages({ db, imgs }: any) {
+    return (
+        <div style={{ display: "grid", gridTemplateColumns: imgs.length === 1 ? "1fr" : "repeat(auto-fit,minmax(200px,1fr))", gap: 10, margin: "10px 0 4px" }}>
+            {imgs.slice(0, 4).map((x: any) => (
+                <figure key={x.path} style={{ margin: 0 }}>
+                    <div style={{ aspectRatio: "4/3", overflow: "hidden", background: "color-mix(in srgb,var(--ink) 6%,transparent)" }}><SlideThumb db={db} s={x} /></div>
+                    {x.caption && <figcaption style={{ fontSize: 13, opacity: 0.7, marginTop: 6, lineHeight: 1.45 }}>{x.caption}</figcaption>}
+                </figure>
+            ))}
         </div>
     )
 }
