@@ -157,6 +157,7 @@ Deno.serve(async (req) => {
             for (const d of feats) {
                 const text = [d.CASENAME, d.WORKCLASS_NAME, d.DESCRIPTION, d.USE_CURR, d.USE_PROPOSED1, d.STRUCT_TYPE_DISP, d.ACCESSORY_DWELLING_UNIT ? "adu" : ""].filter(Boolean).join(" ")
                 if (TRADE_ONLY.test(String(d.CASENAME || "")) || (/repair\/replacement/i.test(d.WORKCLASS_NAME || "") && !/addition|remodel|kitchen|bath|wall|fence|facade/i.test(d.DESCRIPTION || ""))) continue
+                if (/^(void|denied|withdrawn|expired)/i.test(String(d.STATUS || ""))) continue
                 const area = String(d.COUNTYWIDE_STAT_AREA || "").replace(/^Unincorporated - /, "")
                 const areaW = (R.home_areas || []).includes(area) ? 25 : 10
                 const val = Number(d.PERMIT_VALUATION || 0)
@@ -167,7 +168,8 @@ Deno.serve(async (req) => {
                 push({ source: "epicla", market: "LA", jurisdiction: "LA County (unincorporated)", external_id: String(d.CASENUMBER), address: String(d.MAIN_ADDRESS || "").trim() || null,
                     neighborhood: area || null, permit_type: [d.CASENAME, d.WORKCLASS_NAME].filter(Boolean).join(" · ").replace(/^Unincorporated /, ""), work_type: d.STATUS || null,
                     description: d.DESCRIPTION || null, valuation: val || null, filed_on: d.APPLY_DATE ? new Date(d.APPLY_DATE).toISOString().slice(0, 10) : null,
-                    ...kind, score: sc.s, score_why: sc.why, url: `https://epicla.lacounty.gov/energov_prod/SelfService#/search?m=1&fm=1&ps=10&pn=1&em=true&st=${encodeURIComponent(d.CASENUMBER)}`, raw: d }, "COUNTY")
+                    ...kind, applicant_role: "unknown", stage: /Permits & Reviews/i.test(d.CASENAME || "") ? "planning" : /issued|finaled|approved/i.test(d.STATUS || "") ? "issued" : "plan_check",
+                    score: sc.s, score_why: sc.why, url: `https://epicla.lacounty.gov/energov_prod/SelfService#/search?m=1&fm=1&ps=10&pn=1&em=true&st=${encodeURIComponent(d.CASENUMBER)}`, raw: d }, "COUNTY")
             }
         } catch (e) { out.errors.push("LA County: " + (e as Error).message) }
     }
@@ -193,7 +195,7 @@ Deno.serve(async (req) => {
                 push({ source: "ladbs_permits", market: "LA", jurisdiction: "City of Los Angeles", external_id: String(d.permit_nbr), address: d.primary_address ? `${titleCase(d.primary_address)}, Los Angeles ${d.zip_code || ""}`.trim() : null,
                     neighborhood: d.cpa || null, permit_type: [d.permit_type, d.permit_sub_type].filter(Boolean).join(" · "), work_type: d.use_desc || null,
                     description: d.work_desc || null, valuation: val || null, filed_on: (d.issue_date || d.submitted_date || "").slice(0, 10) || null,
-                    ...kind, score: sc.s, score_why: sc.why, url: "https://data.lacity.org/d/pi9x-tg5x", raw: d }, "LA")
+                    ...kind, applicant_role: "unknown", stage: "issued", score: sc.s, score_why: sc.why, url: "https://data.lacity.org/d/pi9x-tg5x", raw: d }, "LA")
             }
         } catch (e) { out.errors.push("City of LA: " + (e as Error).message) }
     }
@@ -213,16 +215,23 @@ Deno.serve(async (req) => {
                 const val = Number(d.initial_cost || 0)
                 if (val && val < Number(r.min_valuation || 0)) continue
                 const text = [d.job_type, d.job_description, d.building_type, d.work_on_floor, d.filing_status, d.existing_occupancy_classification, d.proposed_occupancy_classification].filter(Boolean).join(" ")
-                const kind = classify(text, Number(d.proposed_dwelling_units || 0) || null, val, "NY", lic)
+                const kind: any = classify(text, Number(d.proposed_dwelling_units || 0) || null, val, "NY", lic)
                 if (kind.fit === "skip") continue
+                const title = String(d.applicant_professional_title || "")
+                const role = title === "PE" ? "engineer" : title === "RA" || title === "R" ? "architect" : "unknown"
+                if (role !== "unknown") { kind.fit = "consult"; kind.fit_why = `Already filed by a licensed ${role}${d.applicant_business_name ? " at " + d.applicant_business_name : ""}. The opening is the firm, not the owner: interiors, FF&E, BIM production or overflow drafting.` }
                 const sc = score(text.toLowerCase(), val, 10, r, kind)
                 if (sc.s < 55) continue
                 push({ source: "nyc_dob_now", market: "NY", jurisdiction: "New York City", external_id: String(d.job_filing_number), address: [d.house_no, d.street_name].filter(Boolean).join(" ") + (boro ? `, ${titleCase(boro)}` : ""),
                     neighborhood: d.commmunity_board ? `CB ${d.commmunity_board}` : null, permit_type: d.job_type || d.filing_status || null, work_type: d.building_type || null,
                     description: d.job_description || null, valuation: val || null, filed_on: (d.filing_date || d[":updated_at"] || "").slice(0, 10) || null,
-                    applicant: [d.applicant_first_name, d.applicant_last_name, d.applicant_professional_title].filter(Boolean).join(" ") || null,
-                    ...kind, score: sc.s, score_why: sc.why + (rep ? ` · filed by ${rep}` : ""), url: "https://a810-dobnow.nyc.gov/publish/Index.html#!/", raw: d }, "NY")
+                    applicant: [d.applicant_first_name, d.applicant_last_name].filter(Boolean).join(" ") || null,
+                    ...kind, applicant_role: role, applicant_firm: d.applicant_business_name || null, stage: /approved|permit/i.test(d.filing_status || "") ? "issued" : "plan_check", score: sc.s, score_why: sc.why + (rep ? ` · filed by ${rep}` : ""), url: "https://a810-dobnow.nyc.gov/publish/Index.html#!/", raw: d }, "NY")
             }
+            // NYC returns hundreds of professional filings a week; keep the 80 best so the list stays usable
+            const ny = rows.filter((r) => r.market === "NY").sort((a, b) => b.score - a.score)
+            const drop = new Set(ny.slice(80)); for (let i = rows.length - 1; i >= 0; i--) if (drop.has(rows[i])) rows.splice(i, 1)
+            out.NY.kept = Math.min(out.NY.kept, 80)
             const top = Object.entries(reps).sort((a, b) => b[1] - a[1]).slice(0, 15)
             for (const [firm, n] of top) {
                 const { error } = await db.from("network_contacts").upsert({
@@ -241,7 +250,7 @@ Deno.serve(async (req) => {
         let { data, error } = await db.from("lead_signals").upsert(chunk, { onConflict: "source,external_id", ignoreDuplicates: true }).select("id")
         if (error && /column/i.test(error.message)) {
             // 20261023d not run yet: save without the new columns (type and fit stay in score_why)
-            chunk = chunk.map(({ sector, project_type, fit, fit_why, jurisdiction, ...r }: any) => ({ ...r, score_why: [r.score_why, fit?.toUpperCase(), sector, project_type].filter(Boolean).join(" · ") }))
+            chunk = chunk.map(({ sector, project_type, fit, fit_why, jurisdiction, applicant_role, applicant_firm, stage, ...r }: any) => ({ ...r, score_why: [r.score_why, fit?.toUpperCase(), sector, project_type].filter(Boolean).join(" · ") }))
             ;({ data, error } = await db.from("lead_signals").upsert(chunk, { onConflict: "source,external_id", ignoreDuplicates: true }).select("id"))
         }
         if (error) out.errors.push("save: " + error.message); else saved += (data || []).length

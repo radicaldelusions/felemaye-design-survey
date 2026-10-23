@@ -72,7 +72,18 @@ const ADMIN_TABS = [
     "waterfall",
     "compliance",
     "survey images",
+    "leads",
+    "opportunities",
 ]
+// Sections (2026-10-23e): every tab lives in one section; the colours follow Felema's grouping
+const NAV_GROUPS: { key: string; label: string; color: string; tabs: string[] }[] = [
+    { key: "studio", label: "Studio", color: "var(--ink)", tabs: ["dashboard", "inbox"] },
+    { key: "clients", label: "Clients & projects", color: "#7A4FC4", tabs: ["clients", "meetings", "cadence", "calendar", "client references", "zoning", "permits", "survey images", "ffe"] },
+    { key: "finance", label: "Finance", color: "#3F9A3A", tabs: ["proposals", "finances", "reimbursables", "time", "time bank", "waterfall", "compliance"] },
+    { key: "partners", label: "Partners & products", color: "#3A6FD8", tabs: ["consultants", "vendors", "network", "surface studio", "vignettes"] },
+    { key: "growth", label: "Growth", color: "#B8742A", tabs: ["leads", "opportunities"] },
+]
+const groupOf = (t: string) => NAV_GROUPS.find((g) => g.tabs.includes(t)) || NAV_GROUPS[0]
 
 const OPTIONS: Record<string, string[]> = {
     Materials: [
@@ -372,12 +383,21 @@ export default function MasterStudioConsole(p: Props) {
                 <NotifCenter db={db} openTab={(t: string) => { setViewMode("admin"); setTab(t) }} setFocus={setFocus} />
             </div>
             {viewMode === "admin" && (
-                <nav className="fy-tabs" aria-label="Console sections">
-                    {ADMIN_TABS.map((t) => (
-                        <button key={t} className={"b" + (tab === t ? "" : " g")} aria-current={tab === t ? "page" : undefined} onClick={() => setTab(t)}>
-                            {t}
-                        </button>
-                    ))}
+                <nav className="fy-nav" aria-label="Console sections">
+                    <div className="fy-groups" role="tablist">
+                        {NAV_GROUPS.map((g) => (
+                            <button key={g.key} role="tab" aria-selected={groupOf(tab).key === g.key} style={{ ["--gc" as any]: g.color }} onClick={() => setTab(g.tabs[0])}>
+                                {g.label}<small>{g.tabs.length}</small>
+                            </button>
+                        ))}
+                    </div>
+                    <div className="fy-tabs" style={{ ["--gc" as any]: groupOf(tab).color }}>
+                        {groupOf(tab).tabs.map((t) => (
+                            <button key={t} className={"b" + (tab === t ? "" : " g")} aria-current={tab === t ? "page" : undefined} onClick={() => setTab(t)}>
+                                {t === "ffe" ? "FF&E" : t}
+                            </button>
+                        ))}
+                    </div>
                 </nav>
             )}
             {viewMode === "client" && (
@@ -406,6 +426,10 @@ export default function MasterStudioConsole(p: Props) {
                 <GrowthDashboard db={db} openTab={setTab} />
             ) : tab === "inbox" ? (
                 <InboxTab db={db} focus={focus} />
+            ) : tab === "leads" ? (
+                <LeadsPanel db={db} />
+            ) : tab === "opportunities" ? (
+                <OpportunitiesTab db={db} />
             ) : tab === "client references" || tab === "references" ? (
                 <DesignReads db={db} focus={focus} />
             ) : tab === "proposals" ? (
@@ -5576,13 +5600,20 @@ ${
 .fys .fy-signout{background:transparent;color:var(--ink);border:1.5px solid var(--ink);padding:16px 30px;font:600 15px/1 'Helvetica Neue',Helvetica,Arial,sans-serif;letter-spacing:.14em;text-transform:uppercase;cursor:pointer}
 .fys .fy-signout:hover{background:var(--ink);color:var(--paper)}
 .fys .fy-mode{background:transparent;color:var(--ink);border:.5px solid color-mix(in srgb,var(--ink) 50%,transparent);padding:12px 16px;font:500 12px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;cursor:pointer}
-.fys .fy-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 18px;padding-bottom:16px;border-bottom:.5px solid color-mix(in srgb,var(--ink) 25%,transparent)}
+.fys .fy-nav{margin:0 0 18px;padding-bottom:16px;border-bottom:.5px solid color-mix(in srgb,var(--ink) 25%,transparent)}
+.fys .fy-groups{display:flex;flex-wrap:wrap;gap:0;margin-bottom:10px;border-bottom:1px solid color-mix(in srgb,var(--ink) 18%,transparent)}
+.fys .fy-groups button{all:unset;box-sizing:border-box;cursor:pointer;padding:12px 18px 11px;font:500 13px/1.2 'Helvetica Neue',Helvetica,Arial,sans-serif;letter-spacing:.12em;text-transform:uppercase;border-bottom:3px solid transparent;margin-bottom:-1px;color:var(--ink);opacity:.72}
+.fys .fy-groups button small{font:11px ui-monospace,Menlo,monospace;margin-left:8px;opacity:.7}
+.fys .fy-groups button:hover{opacity:1}
+.fys .fy-groups button[aria-selected=true]{opacity:1;border-bottom-color:var(--gc);font-weight:600}
+.fys .fy-groups button:focus-visible{outline:2px solid var(--gc);outline-offset:2px}
+.fys .fy-tabs{display:flex;flex-wrap:wrap;gap:8px;padding-left:12px;border-left:3px solid var(--gc)}
 .fys .fy-tabs .b{padding:10px 14px}
 .fys .fy-preview-note{border-left:3px solid var(--accent);padding:10px 14px;font-size:15px;line-height:1.6;margin:0 0 16px}
 .fys .linkish{all:unset;cursor:pointer;text-decoration:underline;color:var(--accent);font-weight:600}
 .fys .v4-mode button{font-size:11.5px}.fys .v4-note{font-size:14px;opacity:.85}.fys .v4-kpi small{font-size:13px;opacity:.8}
 .fys p,.fys li{line-height:1.6}
-@media(max-width:700px){.fys .fy-top{flex-direction:column}.fys .fy-corner{width:100%;justify-content:space-between}.fys .fy-signout{flex:1;padding:16px}.fys .fy-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px}.fys .fy-tabs .b{flex:0 0 auto;white-space:nowrap}}
+@media(max-width:700px){.fys .fy-top{flex-direction:column}.fys .fy-corner{width:100%;justify-content:space-between}.fys .fy-signout{flex:1;padding:16px}.fys .fy-tabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:12px}.fys .fy-groups{flex-wrap:wrap}.fys .fy-groups button{flex:0 0 auto;padding:10px 10px 9px;font-size:12px;letter-spacing:.08em}.fys .fy-tabs .b{flex:0 0 auto;white-space:nowrap}}
 ${dark ? "" : `.fys.v4light{--paper:#F4EFE4;--ink:#1F1E1B;--accent:#8A5A1C;--ochre:#8A5A1C;--moss-hi:#4A5536;--slate-hi:#34505F;--oxblood-hi:#6E2B2B;font-family:'Archivo','Helvetica Neue',Arial,sans-serif;font-stretch:92%;min-height:100vh}
 .fys.v4light .c,.fys.v4light .card{background:#FBF8F1;border-color:rgba(31,30,27,.22)}
 .fys.v4light .card[aria-pressed=true]{background:var(--ink);color:var(--paper)}
@@ -7317,7 +7348,7 @@ function GrowthDashboard({ db, openTab }: any) {
 
                 <VerticalForecast db={db} invoices={invoices} deals={deals} target={Number(tgt.revenue_target) || 0} />
 
-                <LeadsPanel db={db} onChange={load} />
+                <LeadSummary db={db} openTab={openTab} />
 
                 <div className="os-grid">
                     <div className="c">
@@ -7861,81 +7892,181 @@ function VerticalForecast({ db, invoices, deals, target }: any) {
 const FIT_LABEL: Record<string, string> = { lead: "You can lead", partner: "Needs a signer", consult: "Consult role" }
 const SECTOR_LABEL: Record<string, string> = { residential_sf: "Single-family", residential_mf: "Multifamily", commercial: "Commercial", hospitality: "Hospitality", mixed_use: "Mixed use", institutional: "Institutional", other: "Other" }
 const TYPE_LABEL: Record<string, string> = { new_construction: "New build", addition: "Addition", alteration: "Remodel / alteration", adu: "ADU", tenant_improvement: "Tenant improvement", fence_wall: "Walls / fences", pool_spa: "Pool / spa", rebuild: "Fire rebuild", entitlement: "Planning application", demolition: "Demolition", repair: "Repair" }
+// ── lead economics: who filed, stage, the introduction path, fee range and chance — all shown with their reasons ──
+const ROLE_LABEL: Record<string, string> = { owner: "Owner (owner-builder)", contractor: "Contractor", architect: "Architect of record", engineer: "Engineer of record", expediter: "Permit expediter", business: "Business owner / tenant", designer: "Designer", unknown: "Not in the public data" }
+const STAGE_LABEL: Record<string, string> = { planning: "Planning review — design still open", plan_check: "In plan check — drawings exist", issued: "Permit issued — building", unknown: "Stage unknown" }
+// typical design fee (studio scope) by project type: [percent of construction low, high, flat low, flat high]
+const FEE_RULES: Record<string, [number, number, number, number]> = {
+    fence_wall: [0, 0, 4000, 12000], addition: [0.08, 0.12, 6000, 25000], adu: [0.06, 0.1, 8000, 20000], alteration: [0.08, 0.1, 3000, 15000],
+    rebuild: [0.04, 0.07, 12000, 45000], tenant_improvement: [0.06, 0.09, 6000, 30000], new_construction: [0.06, 0.1, 20000, 60000],
+    entitlement: [0, 0, 5000, 15000], pool_spa: [0, 0, 2500, 6000], repair: [0, 0, 1500, 4000],
+}
+function leadEconomics(l: any, contacts: any[]) {
+    const stage = l.stage || "unknown"
+    const role = l.applicant_role || "unknown"
+    const rule = FEE_RULES[l.project_type] || [0.06, 0.1, 3000, 15000]
+    const v = Number(l.valuation || 0)
+    let lo = rule[0] && v ? Math.max(rule[2], v * rule[0]) : rule[2]
+    let hi = rule[1] && v ? Math.min(Math.max(rule[3], v * rule[1]), Math.max(rule[3], v * rule[1])) : rule[3]
+    let scope = "Full design and permit set"
+    // once drawings exist, what's left to sell is add-on scope: interiors, finishes, FF&E, landscape, construction support
+    if (stage === "plan_check" || stage === "issued" || role === "architect" || role === "engineer") {
+        scope = "Add-on scope: interiors, finishes, FF&E, landscape or construction support"
+        lo = Math.max(2000, (v || 60000) * 0.02); hi = Math.max(6000, (v || 60000) * 0.05)
+        if (/rebuild/.test(l.project_type) && /standard plan/i.test(l.description || "")) scope = "Site adaptation of a standard plan, interiors and landscape"
+    }
+    if (l.fee_low) lo = Number(l.fee_low)
+    if (l.fee_high) hi = Number(l.fee_high)
+    lo = Math.round(lo / 500) * 500; hi = Math.max(lo, Math.round(hi / 500) * 500)
+    // introduction path: never cold-contact a homeowner
+    const area = String(l.neighborhood || "").toLowerCase()
+    const near = contacts.filter((c) => c.market === l.market && (!area || String(c.area || "").toLowerCase().split(/[·,/]/).some((a: string) => a.trim() && area.includes(a.trim().split(" ")[0])) || /county|los angeles|all/i.test(c.area || "")))
+    const pick = (kinds: string[]) => near.filter((c) => kinds.includes(c.kind)).slice(0, 2)
+    let path = "", via: any[] = [], pathW = 1
+    if (l.intro_contact) { path = `Introduction through ${l.intro_contact}.`; pathW = 2 }
+    else if (role === "architect" || role === "engineer") { path = `Approach the firm of record${l.applicant_firm ? ` (${l.applicant_firm})` : ""} as a collaborator — offer interiors, FF&E, BIM production or overflow drafting. Don't approach their client.`; pathW = 0.8 }
+    else if (role === "contractor") { path = "Approach the contractor: offer drawings, finish selections and 3D for their clients. A contractor who likes working with you sends repeat work."; pathW = 1.3 }
+    else if (role === "expediter") { path = "Approach the expediter. They see projects before a designer is chosen and refer regularly."; via = pick(["expediter"]); pathW = 1.3 }
+    else if (role === "business") { path = "A business is public-facing: a short professional note to the business (not a person at home) introducing interiors and FF&E is appropriate, or go through its broker."; via = pick(["broker"]); pathW = 1 }
+    else if (l.project_type === "rebuild") { path = "Through rebuild channels, not the household: the County's recovery resources, AIA|LA rebuild listings and community rebuild groups. Ask a local realtor or contractor you know whether they are helping this family."; via = pick(["realtor", "contractor", "expediter"]); pathW = 0.9 }
+    else if (role === "owner") { path = "Owner-builder, no professional on the record. Only through a mutual connection — a realtor, contractor or neighbor who knows them. If there's no one, let this one go."; via = pick(["realtor", "broker", "contractor", "expediter"]); pathW = via.length ? 1.1 : 0.4 }
+    else { path = "Who filed isn't known yet — open the record first. If it's a contractor or expediter, approach them; if it's the owner, only through a mutual connection."; via = pick(["realtor", "broker", "contractor", "expediter"]); pathW = via.length ? 1.1 : 0.4 }
+    const stageW = ({ planning: 0.18, plan_check: 0.07, issued: 0.04, unknown: 0.06 } as any)[stage]
+    const fitW = ({ lead: 1, partner: 0.6, consult: 0.5 } as any)[l.fit] ?? 0.7
+    const areaW = /home area/.test(l.score_why || "") ? 1.3 : 1
+    let win = Math.min(0.6, stageW * pathW * fitW * areaW)
+    if (l.win_override != null) win = Number(l.win_override)
+    const mid = (lo + hi) / 2
+    return { stage, role, lo, hi, scope, path, via, win, ev: mid * win, parts: { stage: stageW, path: pathW, fit: fitW, area: areaW } }
+}
+function LeadSummary({ db, openTab }: any) {
+    const [n, setN] = React.useState<any>(null)
+    React.useEffect(() => { db.from("lead_signals").select("fit", { count: "exact" }).eq("status", "new").limit(1000).then(({ data, count }: any) => setN({ total: count ?? (data || []).length, lead: (data || []).filter((x: any) => x.fit === "lead").length }), () => {}) }, [db])
+    return (
+        <div className="c r" style={{ justifyContent: "space-between" }}>
+            <div><span className="mono">Leads · public permit filings</span><div style={{ fontSize: 15, marginTop: 4 }}>{n ? `${n.total} open · ${n.lead} you could lead` : "…"} · fee range, chance and introduction path on each</div></div>
+            <button className="b" onClick={() => openTab?.("leads")}>Open Growth › Leads</button>
+        </div>
+    )
+}
 function LeadsPanel({ db, onChange }: any) {
     const [leads, setLeads] = React.useState<any[]>([])
     const [runs, setRuns] = React.useState<any[]>([])
+    const [contacts, setContacts] = React.useState<any[]>([])
     const [fit, setFit] = React.useState("")
     const [sector, setSector] = React.useState("")
     const [ptype, setPtype] = React.useState("")
     const [src, setSrc] = React.useState("")
+    const [sort, setSort] = React.useState("ev")
     const [days, setDays] = React.useState(7)
     const [busy, setBusy] = React.useState(false)
     const [msg, setMsg] = React.useState("")
     const [n, setN] = React.useState(25)
+    const [edit, setEdit] = React.useState<string>("")
     const load = React.useCallback(async () => {
-        const [l, r] = await Promise.all([
-            db.from("lead_signals").select("*").in("status", ["new", "reviewing", "pursue"]).order("filed_on", { ascending: false, nullsFirst: false }).order("score", { ascending: false }).limit(400),
+        const [l, r, c] = await Promise.all([
+            db.from("lead_signals").select("*").in("status", ["new", "reviewing", "pursue"]).order("filed_on", { ascending: false, nullsFirst: false }).limit(600),
             db.from("lead_scout_runs").select("*").order("ran_at", { ascending: false }).limit(3),
+            db.from("network_contacts").select("id,kind,name,firm,market,area,relationship").limit(500),
         ])
-        setLeads(l.data || []); setRuns(r.data || [])
+        setLeads(l.data || []); setRuns(r.data || []); setContacts(c.data || [])
     }, [db])
     React.useEffect(() => { load() }, [load])
     const run = async () => {
         setBusy(true); setMsg(`Searching the last ${days} days of permit filings…`)
         const { data, error } = await db.functions.invoke("lead-scout", { body: { days, markets: ["LA", "NY"], trigger: "manual" } })
         setBusy(false)
-        if (error || data?.error) {
-            const m = String(data?.error || error?.message || "")
-            return setMsg(/Failed to send|404|not found/i.test(m) ? "The lead-scout function isn't deployed yet — see the setup note (Supabase › Edge Functions › deploy lead-scout, JWT check off)." : m)
-        }
+        if (error || data?.error) { const m = String(data?.error || error?.message || ""); return setMsg(/Failed to send|404|not found/i.test(m) ? "The lead-scout function isn't deployed — Supabase › Edge Functions › deploy lead-scout (JWT check off)." : m) }
         setMsg(`${data.saved} new · LA County ${data.COUNTY?.kept ?? 0} of ${data.COUNTY?.fetched ?? 0} filings kept · City of LA ${data.LA?.kept ?? 0} of ${data.LA?.fetched ?? 0} · NYC ${data.NY?.kept ?? 0} of ${data.NY?.fetched ?? 0}${(data.errors || []).length ? " · " + data.errors.join("; ") : ""}`)
         load()
     }
-    const leadTo = async (l: any, status: string) => {
+    const patch = async (l: any, p: any) => { setLeads((xs) => xs.map((x) => (x.id === l.id ? { ...x, ...p } : x))); const { error } = await db.from("lead_signals").update(p).eq("id", l.id); if (error) setMsg(/column/.test(error.message) ? "Run 20261023e_felemaye_leads_opportunities.sql first." : error.message) }
+    const leadTo = async (l: any, status: string, e?: any) => {
         await db.from("lead_signals").update({ status }).eq("id", l.id)
-        if (status === "pursue") await db.from("pipeline_deals").insert({ name: `${l.address || "Lead"} · ${TYPE_LABEL[l.project_type] || l.work_type || l.permit_type || ""}`.slice(0, 120), market: l.market, project_type: ["commercial", "hospitality", "retail"].includes(l.sector) ? l.sector : l.sector === "residential_mf" || l.sector === "residential_sf" ? "residential" : "other", source: "lead_signal:" + l.source, stage: "lead", lead_signal_id: l.id, notes: [l.description, l.fit_why].filter(Boolean).join("\n\n"), next_step: "Research & first outreach", next_step_on: today() })
+        if (status === "pursue") await db.from("pipeline_deals").insert({ name: `${l.address || "Lead"} · ${TYPE_LABEL[l.project_type] || l.work_type || l.permit_type || ""}`.slice(0, 120), market: l.market, project_type: ["commercial", "hospitality", "retail"].includes(l.sector) ? l.sector : /residential/.test(l.sector || "") ? "residential" : "other", source: "lead_signal:" + l.source, stage: "lead", lead_signal_id: l.id, est_fee: e ? Math.round((e.lo + e.hi) / 2) : null, probability: e ? Math.round(e.win * 100) / 100 : null, notes: [l.description, l.fit_why, e?.path].filter(Boolean).join("\n\n"), next_step: e?.via?.[0] ? `Ask ${e.via[0].name || e.via[0].firm} for an introduction` : "Find the introduction", next_step_on: today() })
         load(); onChange?.()
     }
     const srcOf = (l: any) => (l.source === "epicla" ? "county" : l.source === "ladbs_permits" ? "city" : "nyc")
-    const shown = leads.filter((l) => (!fit || l.fit === fit) && (!sector || l.sector === sector) && (!ptype || l.project_type === ptype) && (!src || srcOf(l) === src))
+    const withE = leads.map((l) => ({ l, e: leadEconomics(l, contacts) }))
+    const shown = withE.filter(({ l }) => (!fit || l.fit === fit) && (!sector || l.sector === sector) && (!ptype || l.project_type === ptype) && (!src || srcOf(l) === src))
+        .sort((a, b) => sort === "ev" ? b.e.ev - a.e.ev : sort === "win" ? b.e.win - a.e.win : String(b.l.filed_on || "").localeCompare(String(a.l.filed_on || "")))
     const count = (k: string, v: string) => leads.filter((l) => l[k] === v).length
     const chips = (val: string, set: (v: string) => void, opts: [string, string][], k?: string) => (
         <div className="fy-chips">{[["", "All"], ...opts].map(([v, l]) => <button key={v || "all"} aria-pressed={val === v} onClick={() => set(v)}>{l}{k && v ? ` · ${count(k, v)}` : ""}</button>)}</div>
     )
+    const pipelineEV = shown.slice(0, 50).reduce((a, x) => a + x.e.ev, 0)
     const last = runs[0]
     return (
         <div className="c">
             <IntelStyle />
             <div className="r" style={{ justifyContent: "space-between" }}>
-                <div><span className="mono">Lead signals · public permit filings</span><div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>LA County unincorporated (EPIC-LA) · City of LA (LADBS) · New York City (DOB NOW). Runs by itself Saturday 7 AM and Sunday 6 PM, so Monday starts with a fresh list.</div></div>
+                <div><span className="mono">Leads · public permit filings</span><div style={{ fontSize: 13.5, opacity: 0.85, marginTop: 4, maxWidth: 760, lineHeight: 1.55 }}>LA County (EPIC-LA), City of LA and NYC filings, each with who filed, the stage, a fee range, your chance, and how to get introduced. Outreach rule: introductions only — never a cold call or letter to a household.</div></div>
                 <span className="r" style={{ gap: 6 }}>
                     <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="How far back">{[3, 7, 14, 30].map((d) => <option key={d} value={d}>last {d} days</option>)}</select>
                     <button className="b" disabled={busy} onClick={run}>{busy ? "Running…" : "Run now"}</button>
                 </span>
             </div>
-            {last && <p className="mono" style={{ marginTop: 6 }}>Last run {new Date(last.ran_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} · {last.trigger} · {last.result?.saved ?? 0} new</p>}
+            {last && <p className="mono" style={{ marginTop: 6 }}>Last run {new Date(last.ran_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} · {last.trigger} · {last.result?.saved ?? 0} new · next: Saturday 7 AM and Sunday 6 PM</p>}
             {msg && <div className="os-warn">{msg}</div>}
             {chips(fit, setFit, [["lead", "You can lead"], ["partner", "Needs a signer"], ["consult", "Consult role"]], "fit")}
             {chips(sector, setSector, [["residential_sf", "Single-family"], ["residential_mf", "Multifamily"], ["commercial", "Commercial"], ["hospitality", "Hospitality"], ["mixed_use", "Mixed use"], ["institutional", "Institutional"]], "sector")}
             {chips(ptype, setPtype, [["fence_wall", "Walls / fences"], ["addition", "Addition"], ["adu", "ADU"], ["alteration", "Remodel"], ["rebuild", "Fire rebuild"], ["tenant_improvement", "TI"], ["new_construction", "New build"], ["entitlement", "Planning app"]], "project_type")}
             {chips(src, setSrc, [["county", "LA County"], ["city", "City of LA"], ["nyc", "NYC"]])}
-            <p className="mono">{shown.length} of {leads.length} open signals</p>
-            {shown.slice(0, n).map((l) => (
+            <div className="r" style={{ justifyContent: "space-between", margin: "6px 0" }}>
+                <span className="mono">{shown.length} of {leads.length} open · expected value of the top 50: {$0(pipelineEV)}</span>
+                <select value={sort} onChange={(e) => setSort(e.target.value)} aria-label="Sort"><option value="ev">Sort: expected value</option><option value="win">Sort: chance</option><option value="new">Sort: newest</option></select>
+            </div>
+            {shown.slice(0, n).map(({ l, e }) => (
                 <div key={l.id} className="fy-lead">
                     {l.fit && <span className={"fy-fit " + l.fit}>{FIT_LABEL[l.fit] || l.fit}</span>}
                     {l.sector && <span className="os-pill">{SECTOR_LABEL[l.sector] || l.sector}</span>}
                     {l.project_type && <span className="os-pill">{TYPE_LABEL[l.project_type] || l.project_type}</span>}
-                    <span className="os-pill">{l.jurisdiction || l.market}</span><span className="os-pill">score {l.score ?? "–"}</span>
+                    <span className="os-pill">{l.jurisdiction || l.market}</span>
                     <div style={{ marginTop: 4 }}><b>{l.address}</b>{l.neighborhood ? ` · ${l.neighborhood}` : ""}</div>
-                    <div style={{ opacity: 0.8 }}>{[l.permit_type, l.work_type].filter(Boolean).join(" · ")}{l.valuation ? ` · ${$0(l.valuation)}` : ""}{l.filed_on ? ` · filed ${l.filed_on}` : ""}</div>
-                    {l.description && <div style={{ opacity: 0.75, fontSize: 13 }}>{String(l.description).slice(0, 260)}</div>}
-                    {l.fit_why && <div style={{ fontSize: 13, marginTop: 3 }}><b>What you can do:</b> {l.fit_why}</div>}
-                    {l.score_why && <div className="mono">{l.score_why}</div>}
-                    <div className="r" style={{ marginTop: 6 }}><button className="b" onClick={() => leadTo(l, "pursue")}>Pursue → pipeline</button><button className="b g" onClick={() => leadTo(l, "dismissed")}>Dismiss</button>{l.url && <a className="mono" href={l.url} target="_blank" rel="noopener">record ↗</a>}</div>
+                    <div style={{ opacity: 0.8 }}>{[l.permit_type, l.work_type].filter(Boolean).join(" · ")}{l.valuation ? ` · ${$0(l.valuation)} declared` : ""}{l.filed_on ? ` · filed ${l.filed_on}` : ""}</div>
+                    {l.description && <div style={{ opacity: 0.75, fontSize: 13 }}>{String(l.description).slice(0, 240)}</div>}
+                    <div className="os-grid" style={{ marginTop: 8, gap: 8 }}>
+                        <div style={{ fontSize: 13, lineHeight: 1.55 }}>
+                            <div className="mono">Who filed</div>
+                            <b>{ROLE_LABEL[e.role] || e.role}</b>{l.applicant_firm ? ` · ${l.applicant_firm}` : ""}{l.applicant && (e.role === "architect" || e.role === "engineer") ? ` · ${l.applicant}` : ""}
+                            {e.role === "unknown" && <div style={{ opacity: 0.8 }}>{l.source === "epicla" ? "The County's open data doesn't list the applicant. Open the record — the case page shows the applicant and contractor — then set it here." : "Not published for this record."}</div>}
+                            <div className="mono" style={{ marginTop: 6 }}>Stage</div>{STAGE_LABEL[e.stage]}
+                        </div>
+                        <div style={{ fontSize: 13, lineHeight: 1.55 }}>
+                            <div className="mono">Potential fee</div>
+                            <b style={{ font: "400 22px 'Cormorant Garamond',Georgia,serif" }}>{$0(e.lo)}–{$0(e.hi)}</b><div style={{ opacity: 0.8 }}>{e.scope}</div>
+                            <div className="mono" style={{ marginTop: 6 }}>Chance · expected value</div>
+                            <b>{Math.round(e.win * 100)}%</b> · {$0(e.ev)}<div className="mono" title="stage × introduction × fit × area">stage {e.parts.stage} × intro {e.parts.path} × fit {e.parts.fit}{e.parts.area !== 1 ? ` × area ${e.parts.area}` : ""}</div>
+                        </div>
+                        <div style={{ fontSize: 13, lineHeight: 1.55 }}>
+                            <div className="mono">How to get introduced</div>{e.path}
+                            {e.via.length > 0 && <div style={{ marginTop: 4 }}>Ask: {e.via.map((c: any) => <span key={c.id} className="os-pill">{c.name || c.firm}{c.firm && c.name ? " · " + c.firm : ""} ({c.kind})</span>)}</div>}
+                        </div>
+                    </div>
+                    {l.fit_why && <div style={{ fontSize: 13, marginTop: 6 }}><b>What you can do:</b> {l.fit_why}</div>}
+                    {edit === l.id && (
+                        <div className="r" style={{ marginTop: 8, borderTop: ".5px dashed color-mix(in srgb,var(--ink) 30%,transparent)", paddingTop: 8 }}>
+                            <label className="mono">Who filed <select value={l.applicant_role || "unknown"} onChange={(ev) => patch(l, { applicant_role: ev.target.value })}>{Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                            <input placeholder="Firm / company" defaultValue={l.applicant_firm || ""} onBlur={(ev) => ev.target.value !== (l.applicant_firm || "") && patch(l, { applicant_firm: ev.target.value || null })} />
+                            <label className="mono">Stage <select value={l.stage || "unknown"} onChange={(ev) => patch(l, { stage: ev.target.value })}>{Object.entries(STAGE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+                            <input placeholder="Introduced by (name)" defaultValue={l.intro_contact || ""} onBlur={(ev) => ev.target.value !== (l.intro_contact || "") && patch(l, { intro_contact: ev.target.value || null })} />
+                            <input inputMode="decimal" placeholder="Fee low $" defaultValue={l.fee_low ?? ""} onBlur={(ev) => patch(l, { fee_low: ev.target.value ? Number(ev.target.value) : null })} style={{ width: 100 }} />
+                            <input inputMode="decimal" placeholder="Fee high $" defaultValue={l.fee_high ?? ""} onBlur={(ev) => patch(l, { fee_high: ev.target.value ? Number(ev.target.value) : null })} style={{ width: 100 }} />
+                            <input inputMode="decimal" placeholder="Chance 0–1" defaultValue={l.win_override ?? ""} onBlur={(ev) => patch(l, { win_override: ev.target.value ? Math.min(1, Math.max(0, Number(ev.target.value))) : null })} style={{ width: 90 }} />
+                            <input placeholder="Notes" defaultValue={l.outreach_notes || ""} onBlur={(ev) => patch(l, { outreach_notes: ev.target.value || null })} style={{ flex: "2 1 220px" }} />
+                        </div>
+                    )}
+                    <div className="r" style={{ marginTop: 6 }}>
+                        <button className="b" onClick={() => leadTo(l, "pursue", e)}>Pursue → pipeline</button>
+                        <button className="b g" onClick={() => setEdit(edit === l.id ? "" : l.id)}>{edit === l.id ? "Done" : "Who filed / adjust"}</button>
+                        <button className="b g" onClick={() => leadTo(l, "dismissed")}>Dismiss</button>
+                        {l.url && <a className="mono" href={l.url} target="_blank" rel="noopener">record ↗</a>}
+                    </div>
                 </div>
             ))}
             {shown.length > n && <button className="b g" style={{ marginTop: 10 }} onClick={() => setN(n + 25)}>Show 25 more</button>}
             {!leads.length && <p style={{ fontSize: 14, opacity: 0.8 }}>No open signals yet. Press Run now, or wait for the weekend run.</p>}
+            <p className="mono" style={{ marginTop: 10 }}>Fee ranges are studio rules of thumb by project type and stage (percent of declared value, or a flat range when no value is filed); set your own on any lead. Chance = stage × introduction × fit × area, capped at 60%.</p>
         </div>
     )
 }
@@ -8109,5 +8240,137 @@ function RefImage({ f, url }: any) {
         <a href={href} target="_blank" rel="noopener" title={name}>
             {url && !bad ? <><img src={url} alt={name} loading="lazy" onError={() => setBad(true)} /><span>{name}</span></> : <div className="tile">{name} ↗<br /><small style={{ opacity: 0.6 }}>{f.drive_id ? "Drive — picture appears after the next Drive sync" : ""}</small></div>}
         </a>
+    )
+}
+
+/* ───────────── Growth › Opportunities: fellowships, residencies, prizes, grants ───────────── */
+const OPP_STATUS = ["suggested", "watch", "preparing", "submitted", "shortlisted", "won", "declined", "skip"]
+const fitFactor = (fit: number) => 0.5 + 2 * Math.pow(Math.max(0, Math.min(100, fit || 0)) / 100, 2)
+function OppCard({ o, save }: any) {
+    const [open, setOpen] = React.useState(false)
+    const [ref, setRef] = React.useState("")
+    const days = o.deadline ? Math.ceil((new Date(o.deadline + "T23:59:00").getTime() - Date.now()) / 864e5) : null
+    const req = (o.requirements || []) as any[]
+    const refs = (o.refs || []) as any[]
+    const done = req.filter((r) => r.done).length + refs.filter((r) => r.status === "submitted").length
+    const total = req.length + Math.max(refs.length, o.refs_needed || 0)
+    const chance = o.base_rate != null ? Math.min(0.5, Number(o.base_rate) * fitFactor(o.fit)) : null
+    const urgent = days != null && days >= 0 && days <= 21
+    return (
+        <div className="c" style={{ borderLeft: `3px solid ${urgent ? "var(--accent)" : "color-mix(in srgb,var(--ink) 25%,transparent)"}` }}>
+            <div className="r" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: "1 1 360px" }}>
+                    <span className="os-pill">{o.kind}</span>{o.status === "suggested" && <span className="fy-fit partner">suggested</span>}
+                    <h3 style={{ margin: "6px 0 2px", fontSize: 20, fontWeight: 500 }}>{o.url ? <a href={o.url} target="_blank" rel="noopener" style={{ color: "inherit" }}>{o.name} ↗</a> : o.name}</h3>
+                    <div style={{ fontSize: 13.5, opacity: 0.85 }}>{[o.org, o.location, o.award, o.duration].filter(Boolean).join(" · ")}</div>
+                </div>
+                <div style={{ textAlign: "right", minWidth: 150 }}>
+                    <div className="mono">Deadline</div>
+                    <b style={{ font: "400 24px 'Cormorant Garamond',Georgia,serif", color: urgent ? "var(--accent)" : undefined }}>{o.deadline ? new Date(o.deadline + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" }) : "TBC"}</b>
+                    <div style={{ fontSize: 12.5 }}>{days == null ? o.deadline_note || "" : days < 0 ? "closed" : `${days} day${days === 1 ? "" : "s"} left`}</div>
+                </div>
+            </div>
+            {o.deadline_note && o.deadline && <p className="mono" style={{ margin: "4px 0 0" }}>{o.deadline_note}</p>}
+            <div className="os-grid" style={{ marginTop: 10, gap: 10 }}>
+                <div style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                    <div className="mono">Fit</div>
+                    <div style={{ height: 6, background: "color-mix(in srgb,var(--ink) 12%,transparent)", margin: "6px 0" }}><div style={{ width: `${o.fit || 0}%`, height: "100%", background: "var(--accent)" }} /></div>
+                    <b>{o.fit ?? "—"}/100</b> · {o.fit_why}
+                </div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                    <div className="mono">Estimated chance</div>
+                    <b style={{ font: "400 22px 'Cormorant Garamond',Georgia,serif" }}>{chance != null ? (chance * 100).toFixed(chance < 0.05 ? 1 : 0) + "%" : "—"}</b>
+                    <div style={{ opacity: 0.8 }}>{o.base_rate != null ? `base ${(Number(o.base_rate) * 100).toFixed(0)}% × fit factor ${fitFactor(o.fit).toFixed(2)}` : ""}{o.base_rate_basis ? ` — ${o.base_rate_basis}` : ""}</div>
+                </div>
+                <div style={{ fontSize: 13.5, lineHeight: 1.55 }}>
+                    <div className="mono">Readiness</div>
+                    <b>{done} of {total || req.length}</b> items ready
+                    {(o.gaps || []).length > 0 && <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{o.gaps.map((g: string, i: number) => <li key={i}>{g}</li>)}</ul>}
+                </div>
+            </div>
+            {o.angle && <p style={{ fontSize: 14, margin: "10px 0 0" }}><b>Angle:</b> {o.angle}</p>}
+            <div className="r" style={{ marginTop: 10 }}>
+                <select value={o.status} onChange={(e) => save(o, { status: e.target.value })} aria-label="Status">{OPP_STATUS.map((s) => <option key={s}>{s}</option>)}</select>
+                <button className="b g" onClick={() => setOpen(!open)}>{open ? "Close" : "Checklist & references"}</button>
+            </div>
+            {open && (
+                <div style={{ marginTop: 10, borderTop: ".5px solid color-mix(in srgb,var(--ink) 20%,transparent)", paddingTop: 10, fontSize: 14 }}>
+                    {o.eligibility && <p style={{ margin: "0 0 8px" }}><b>Eligibility:</b> {o.eligibility}</p>}
+                    <div className="mono">What the application needs</div>
+                    {req.map((r, i) => <label key={i} style={{ display: "flex", gap: 8, padding: "4px 0" }}><input type="checkbox" checked={!!r.done} onChange={() => save(o, { requirements: req.map((x, j) => (j === i ? { ...x, done: !x.done } : x)) })} style={{ width: "auto" }} />{r.item}</label>)}
+                    <AddLine placeholder="Add a requirement and press Enter" onAdd={(t: string) => t.trim() && save(o, { requirements: [...req, { item: t.trim(), done: false }] })} />
+                    <div className="mono" style={{ marginTop: 12 }}>References{o.refs_needed ? ` · ${o.refs_needed} needed` : ""}</div>
+                    {refs.map((r, i) => (
+                        <div key={i} className="r" style={{ padding: "4px 0" }}>
+                            <span style={{ flex: "1 1 200px" }}>{r.name}{r.relation ? <span className="mono"> · {r.relation}</span> : null}</span>
+                            <select value={r.status} onChange={(e) => save(o, { refs: refs.map((x, j) => (j === i ? { ...x, status: e.target.value } : x)) })}>{["ask", "asked", "agreed", "submitted"].map((s) => <option key={s}>{s}</option>)}</select>
+                            <button className="b g" onClick={() => save(o, { refs: refs.filter((_, j) => j !== i) })}>Remove</button>
+                        </div>
+                    ))}
+                    <div className="r"><input placeholder="Name · how you know them" value={ref} onChange={(e) => setRef(e.target.value)} style={{ flex: "1 1 260px" }} /><button className="b g" onClick={() => { if (!ref.trim()) return; const [name, relation] = ref.split("·").map((x) => x.trim()); save(o, { refs: [...refs, { name, relation: relation || "", status: "ask" }] }); setRef("") }}>Add reference</button></div>
+                    <textarea rows={2} defaultValue={o.notes || ""} onBlur={(e) => e.target.value !== (o.notes || "") && save(o, { notes: e.target.value })} placeholder="Notes" style={{ width: "100%", marginTop: 10 }} />
+                    <div className="r" style={{ marginTop: 6 }}>
+                        <label className="mono">Fit <input inputMode="numeric" defaultValue={o.fit ?? ""} onBlur={(e) => save(o, { fit: e.target.value ? Math.max(0, Math.min(100, Number(e.target.value))) : null })} style={{ width: 60 }} /></label>
+                        <label className="mono">Deadline <input type="date" defaultValue={o.deadline || ""} onBlur={(e) => save(o, { deadline: e.target.value || null })} /></label>
+                        {o.verified_on && <span className="mono">checked {o.verified_on}{o.source ? ` · ${o.source}` : ""}</span>}
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+function OpportunitiesTab({ db }: any) {
+    const [rows, setRows] = React.useState<any[]>([])
+    const [err, setErr] = React.useState<any>(null)
+    const [filter, setFilter] = React.useState("active")
+    const [profile, setProfile] = React.useState("")
+    const [showProfile, setShowProfile] = React.useState(false)
+    const [focus, setFocusTxt] = React.useState("")
+    const [busy, setBusy] = React.useState(false)
+    const [msg, setMsg] = React.useState("")
+    const load = React.useCallback(async () => {
+        const [o, p] = await Promise.all([db.from("opportunities").select("*").order("deadline", { ascending: true, nullsFirst: false }), db.from("studio_config").select("value").eq("key", "practice_profile").maybeSingle()])
+        if (o.error) return setErr(o.error)
+        setRows(o.data || []); setProfile(p.data?.value || "")
+    }, [db])
+    React.useEffect(() => { load() }, [load])
+    const save = async (o: any, p: any) => { setRows((xs) => xs.map((x) => (x.id === o.id ? { ...x, ...p } : x))); const { error } = await db.from("opportunities").update({ ...p, updated_at: new Date().toISOString() }).eq("id", o.id); if (error) setMsg(error.message) }
+    const saveProfile = async () => { const { error } = await db.from("studio_config").upsert({ key: "practice_profile", value: profile }); setMsg(error ? error.message : "Profile saved — the finder uses it on the next search.") }
+    const find = async () => {
+        setBusy(true); setMsg("Searching current calls that fit your practice — about a minute…")
+        const { data, error } = await db.functions.invoke("zoning-analyze", { body: { mode: "opportunities", count: 8, focus } })
+        setBusy(false)
+        if (error || data?.error) return setMsg((data?.error || error?.message || "Search failed") + " — redeploy zoning-analyze (2026-10-23e) and check ANTHROPIC_API_KEY.")
+        const list = (data.opportunities || []).map((o: any) => ({ ...o, deadline: /^\d{4}-\d{2}-\d{2}$/.test(o.deadline || "") ? o.deadline : null, requirements: o.requirements || [], gaps: o.gaps || [], status: "suggested", source: "finder", verified_on: today(), cycle: o.cycle || "next" }))
+        if (!list.length) return setMsg("Nothing new this time.")
+        const { error: e2 } = await db.from("opportunities").upsert(list, { onConflict: "name,cycle", ignoreDuplicates: true })
+        setMsg(e2 ? e2.message : `${list.length} suggestions added — check each link before you plan around it.`); load()
+    }
+    const now = today()
+    const active = (o: any) => !["skip", "declined"].includes(o.status) && (!o.deadline || o.deadline >= now)
+    const shown = rows.filter((o) => filter === "all" ? true : filter === "active" ? active(o) : o.status === filter)
+    const soon = rows.filter((o) => active(o) && o.deadline).slice(0, 4)
+    return (
+        <div>
+            <IntelStyle />
+            <OSStyle />
+            <div className="r" style={{ justifyContent: "space-between", alignItems: "flex-end" }}>
+                <div><div className="mono">Growth · opportunities</div><h2 className="v4-h" style={{ margin: "6px 0" }}>Fellowships, residencies, prizes and grants</h2><p style={{ fontSize: 14, margin: 0, maxWidth: 720, lineHeight: 1.6 }}>Each one scored against your practice, with what the application needs, who you'll ask for references, and an estimated chance. Deadlines are checked against the organiser; re-check before you submit.</p></div>
+                <button className="b g" onClick={() => setShowProfile(!showProfile)}>{showProfile ? "Close profile" : "Practice profile"}</button>
+            </div>
+            {showProfile && <div className="c"><div className="mono">What the scoring and the finder know about you</div><textarea rows={6} value={profile} onChange={(e) => setProfile(e.target.value)} style={{ width: "100%", marginTop: 8, fontSize: 14 }} /><button className="b" onClick={saveProfile}>Save profile</button></div>}
+            <GateD err={err}>
+                {soon.length > 0 && <div className="os-kpis" style={{ margin: "12px 0" }}>{soon.map((o) => { const d = Math.ceil((new Date(o.deadline + "T23:59:00").getTime() - Date.now()) / 864e5); return <div key={o.id} className="os-kpi" style={{ borderColor: d <= 21 ? "var(--accent)" : undefined }}><span className="mono">{d} days</span><b style={{ fontSize: 20 }}>{o.name.split(" — ")[0]}</b><small>{new Date(o.deadline + "T12:00:00").toLocaleDateString([], { month: "short", day: "numeric" })} · {o.org}</small></div> })}</div>}
+                <div className="c r">
+                    <input placeholder="Focus for the finder (optional): e.g. craft and material residencies abroad, landscape, Black spatial history" value={focus} onChange={(e) => setFocusTxt(e.target.value)} style={{ flex: "2 1 360px" }} />
+                    <button className="b" disabled={busy} onClick={find}>{busy ? "Searching…" : "Find more"}</button>
+                </div>
+                <div className="fy-chips">{[["active", "Open & upcoming"], ["suggested", "Suggested"], ["watch", "Watching"], ["preparing", "Preparing"], ["submitted", "Submitted"], ["won", "Won"], ["all", "All"]].map(([v, l]) => <button key={v} aria-pressed={filter === v} onClick={() => setFilter(v)}>{l} · {v === "all" ? rows.length : v === "active" ? rows.filter(active).length : rows.filter((o) => o.status === v).length}</button>)}</div>
+                {msg && <div className="os-warn">{msg}</div>}
+                {shown.map((o) => <OppCard key={o.id} o={o} save={save} />)}
+                {!shown.length && <p style={{ fontSize: 14 }}>Nothing here yet.</p>}
+                <p className="mono">Estimated chance = published or estimated acceptance rate × a fit factor (0.5 at fit 0, about 1.5 at 70, 2.5 at 100), capped at 50%. Treat it as a ranking aid, not a forecast.</p>
+            </GateD>
+        </div>
     )
 }

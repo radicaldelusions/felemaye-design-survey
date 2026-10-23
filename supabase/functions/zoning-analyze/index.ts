@@ -57,6 +57,7 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}))
     if (body.mode === "references") return referencesRead(body, key, url)
     if (body.mode === "update") return updateAnalysis(body, key, url)
+    if (body.mode === "opportunities") return findOpportunities(body, key, url)
     const { project_id, jurisdiction = "la_county", text = "", files = [] } = body
     if (!project_id || String(text).trim().length < 40) return json({ error: "Upload or paste the meeting notes first." }, 400)
 
@@ -183,5 +184,39 @@ ${SHAPE}`
         return json({ analysis, model: out.model, usage: out.usage })
     } catch {
         return json({ error: "Could not read the updated analysis — try again.", raw: raw.slice(0, 1500) }, 502)
+    }
+}
+
+
+// ── opportunities mode (2026-10-23e): search the web for fellowships, residencies, prizes and grants that fit the
+//    practice profile, and return them scored. The console saves them as "suggested" for Felema to review.
+async function findOpportunities(b: any, key: string, url: string) {
+    const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } })
+    const [{ data: prof }, { data: have }] = await Promise.all([
+        db.from("studio_config").select("value").eq("key", "practice_profile").maybeSingle(),
+        db.from("opportunities").select("name,org,cycle"),
+    ])
+    const today = new Date().toISOString().slice(0, 10)
+    const system = `You find funding and residency opportunities for one architect and report them accurately.
+Practice profile: ${prof?.value || "(not set)"}
+Already tracked (do not repeat): ${(have || []).map((h: any) => `${h.name} (${h.org || ""}, ${h.cycle || ""})`).join("; ").slice(0, 4000)}
+Today is ${today}. Use web search. Only include programmes whose current or next cycle you have confirmed on the organiser's site or a reputable listing; put the URL you used in "url". Prefer deadlines in the next 9 months. Include architecture, design, landscape, craft/material and research programmes in the US and abroad that accept US-based architects.
+For each: estimate base_rate (acceptance rate, 0–1) and say how you estimated it; fit 0–100 for this practice with a one-sentence reason; list what she would still need (gaps); suggest a proposal angle drawn from her actual work. Plain language; no hype.
+Return ONLY JSON: {"opportunities":[{"name":"","org":"","kind":"fellowship|residency|prize|grant|competition","disciplines":"","location":"","award":"","duration":"","deadline":"YYYY-MM-DD or null","deadline_note":"","cycle":"","eligibility":"","requirements":[{"item":"","done":false}],"refs_needed":null,"base_rate":0.05,"base_rate_basis":"","fit":70,"fit_why":"","gaps":[""],"angle":"","url":""}]}`
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-5-5", max_tokens: 8000, system,
+            tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 12 }],
+            messages: [{ role: "user", content: `Find up to ${Math.min(12, Number(b.count) || 8)} new opportunities${b.focus ? " with this focus: " + b.focus : ""}.` }] }),
+    })
+    if (!r.ok) return json({ error: "Search service error", detail: (await r.text()).slice(0, 400) }, 502)
+    const out = await r.json()
+    const raw = (out.content || []).filter((c: any) => c.type === "text").map((c: any) => c.text || "").join("")
+    try {
+        const parsed = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1))
+        return json({ opportunities: parsed.opportunities || [], model: out.model })
+    } catch {
+        return json({ error: "Could not read the results — try again.", raw: raw.slice(0, 1500) }, 502)
     }
 }
