@@ -36,7 +36,12 @@ const SHAPE = `{
  "sheet_requirements": ["jurisdiction sheet / title-block / submittal requirements that matter for this scope"],
  "sheet": {"number": "e.g. G-001 or Z-001", "title": "sheet title", "note": "why"},
  "facts": {"zone_class": null, "overlays": [], "setback_front_ft": null, "setback_side_ft": null, "setback_rear_ft": null, "height_cap_ft": null, "wall_height_cap_in": null, "transparency_pct": null, "lot_area_sf": null, "far_allowable": null, "occupancy": null},
- "sources": [{"title": "document or code", "url": "only if it appears in the material", "cited_for": "what it supports"}]
+ "sources": [{"title": "document or code", "url": "only if it appears in the material", "cited_for": "what it supports"}],
+ "numbers": [{"item": "e.g. Front-yard fence — solid portion", "unit": "in | ft | sf | %", "code": "what the code says", "planner": "what the planner said", "governing": "the number to design to", "option_a": "", "option_b": "", "basis": "section / source", "status": "confirmed | conflict | to_verify"}],
+ "scenarios": [{"id": "S1", "name": "short name", "what": "one sentence", "solid_in": null, "total_ft": null, "open_pct": null, "roof": "none | allowed | prohibited", "path": "by right / which review", "approvals": "permits and applications", "weeks": "range", "verdict": "works | conditional | does_not_work", "why": "one sentence"}],
+ "evidence": [{"date": "YYYY-MM-DD or month", "source": "who / what document", "said": "what it established", "effect": "what it changed in this analysis"}],
+ "revit": [{"param": "FY_ParameterName", "type": "Text | Length | Area | Number", "value": "value with units as Revit would show them", "note": ""}],
+ "change_log": ["one line per version"]
 }`
 
 Deno.serve(async (req) => {
@@ -51,6 +56,7 @@ Deno.serve(async (req) => {
 
     const body = await req.json().catch(() => ({}))
     if (body.mode === "references") return referencesRead(body, key, url)
+    if (body.mode === "update") return updateAnalysis(body, key, url)
     const { project_id, jurisdiction = "la_county", text = "", files = [] } = body
     if (!project_id || String(text).trim().length < 40) return json({ error: "Upload or paste the meeting notes first." }, 400)
 
@@ -107,7 +113,8 @@ const READ_SHAPE = `{
  "keep_out": ["things the client signalled against, or that would dilute the scheme"],
  "tensions": ["conflicts with the zoning limits, the existing house, budget, maintenance"],
  "sd_moves": ["concrete schematic options to draw"],
- "questions": ["questions for the client before SD"]
+ "questions": ["questions for the client before SD"],
+ "products": [{"item": "which material above", "product": "a real, currently sold product line", "maker": "manufacturer", "vendor": "the vendor name exactly as in the studio's vendor list when one fits, else empty", "format": "size / format", "finish": "colour / finish", "url": null, "why": "which images it answers"}]
 }`
 
 async function referencesRead(b: any, key: string, url: string) {
@@ -119,7 +126,9 @@ async function referencesRead(b: any, key: string, url: string) {
         db.from("project_zoning_audits").select("analysis").eq("project_id", b.project_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ])
     const limits = audit?.analysis ? JSON.stringify({ non_negotiables: audit.analysis.non_negotiables, facts: audit.analysis.facts }).slice(0, 4000) : "(no zoning analysis saved yet)"
-    const system = `You are a senior residential architect preparing an internal design read before Schematic Design. Look closely at the client's reference images and describe what is actually in them: forms, materials, finishes, planting, colour, light, furniture. Be specific (name materials and finishes a contractor could price). Note when images disagree with each other. Do not flatter, do not use marketing language, avoid lists of three for rhythm's sake, and do not invent things you cannot see. Zoning limits for this site: ${limits}
+    const { data: vendors } = await db.from("vendors").select("name,category_primary").limit(400)
+    const vendorList = (vendors || []).map((v: any) => `${v.name} (${v.category_primary || ""})`).join("; ").slice(0, 6000)
+    const system = `You are a senior residential architect preparing an internal design read before Schematic Design. For products, prefer the studio's vendors: ${vendorList}. Only name product lines you are confident exist; leave url null rather than guess. Look closely at the client's reference images and describe what is actually in them: forms, materials, finishes, planting, colour, light, furniture. Be specific (name materials and finishes a contractor could price). Note when images disagree with each other. Do not flatter, do not use marketing language, avoid lists of three for rhythm's sake, and do not invent things you cannot see. Zoning limits for this site: ${limits}
 Return ONLY one JSON object in this shape:
 ${READ_SHAPE}`
     const content: any[] = [{ type: "text", text: `Project: ${project?.title || ""} — ${project?.address || ""}\nStudio notes: ${b.notes || "(none)"}\nImages follow, each preceded by its file name.` }]
@@ -138,5 +147,41 @@ ${READ_SHAPE}`
         return json({ read, model: out.model })
     } catch {
         return json({ error: "Could not read the result — try again.", raw: raw.slice(0, 1500) }, 502)
+    }
+}
+
+
+// ── update mode (2026-10-23d): fold new evidence into an existing analysis, keep its structure, log the change ──
+async function updateAnalysis(b: any, key: string, url: string) {
+    const prior = b.prior || {}
+    const material = String(b.text || "").slice(0, 60000)
+    if (!b.project_id || material.trim().length < 20) return json({ error: "Add the new notes first." }, 400)
+    const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } })
+    const { data: project } = await db.from("projects").select("title,address").eq("id", b.project_id).maybeSingle()
+    const system = `You maintain a living zoning & code analysis for a design studio. You receive the current analysis (JSON) and new material (meeting notes, letters, research). Return the full updated analysis in the same JSON shape.
+Jurisdiction: ${JURIS[b.jurisdiction] || b.jurisdiction}
+Rules:
+- Keep everything still true. Change only what the new material changes, and say so: append one entry to "evidence" (date, source, said, effect) and one line to "change_log".
+- When new material contradicts an earlier statement, keep both in "conflicts" unless the new material clearly supersedes it; then revise the item and note the supersession in the evidence effect.
+- Keep and update "numbers" (a row per measurable limit, with code / planner / governing / option A / option B / basis / status) and "scenarios" (each with verdict works | conditional | does_not_work). Add a scenario when the new material opens a new path.
+- Keep "revit" parameters consistent with "numbers".
+- Never invent section numbers; write "section to confirm". Mark your own knowledge "(verify)".
+- Plain professional language. No marketing tone.
+Return ONLY one JSON object in this shape:
+${SHAPE}`
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-5-5", max_tokens: 12000, system,
+            messages: [{ role: "user", content: `Project: ${project?.title || ""} — ${project?.address || ""}\nToday: ${new Date().toISOString().slice(0, 10)}\n\nCURRENT ANALYSIS:\n${JSON.stringify(prior).slice(0, 60000)}\n\nNEW MATERIAL (${(b.files || []).join(", ") || "notes"}):\n${material}` }] }),
+    })
+    if (!r.ok) return json({ error: "Analysis service error", detail: (await r.text()).slice(0, 400) }, 502)
+    const out = await r.json()
+    const raw = (out.content || []).map((c: any) => c.text || "").join("")
+    try {
+        const analysis = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1))
+        return json({ analysis, model: out.model, usage: out.usage })
+    } catch {
+        return json({ error: "Could not read the updated analysis — try again.", raw: raw.slice(0, 1500) }, 502)
     }
 }

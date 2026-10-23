@@ -20,6 +20,10 @@ Setup (PC):
       TRADE_BOT_CMD=python trade_apply.py # your Playwright script
   python trade_job_poller.py              # Ctrl+C to stop
 
+"assist" jobs (2026-10-23d, the console's "Prefill on my PC"): the poller downloads the shared answers library,
+then runs TRADE_ASSIST_CMD (default: python trade_assist.py) which opens the form in a visible browser, filled in,
+and waits while you review and submit it yourself. One form at a time.
+
 Script contract: it is called as  TRADE_BOT_CMD --job <id> --vendor <vendor_id> --kind <apply|discover|status_check>
 and prints ONE JSON line on stdout as its last line:
   {"status": "done" | "needs_review" | "failed", "note": "short human text", ...anything else}
@@ -34,6 +38,7 @@ load_dotenv()
 URL = os.environ["SUPABASE_URL"].rstrip("/")
 KEY = os.environ["SUPABASE_SERVICE_KEY"]
 CMD = os.environ.get("TRADE_BOT_CMD", "python trade_apply.py")
+ASSIST = os.environ.get("TRADE_ASSIST_CMD", "python trade_assist.py")
 POLL = int(os.environ.get("TRADE_POLL_SECONDS", "30"))
 WORKER = "pc:" + socket.gethostname()
 H = {"apikey": KEY, "Authorization": "Bearer " + KEY, "Content-Type": "application/json"}
@@ -55,11 +60,23 @@ def patch(job_id, body):
     r.raise_for_status()
 
 
+def answers_file():
+    r = requests.get(f"{URL}/rest/v1/trade_form_answers?select=field_key,label,answer,match_terms,sensitive", headers=H, timeout=30)
+    r.raise_for_status()
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".trade_answers.json")
+    json.dump(r.json(), open(path, "w", encoding="utf-8"))
+    return path
+
+
 def run(job):
     patch(job["id"], {"status": "running"})
-    args = shlex.split(CMD) + ["--job", job["id"], "--vendor", job["vendor_id"] or "", "--kind", job["kind"]]
+    if job["kind"] == "assist":
+        url = (job.get("payload") or {}).get("url") or ""
+        args = shlex.split(ASSIST) + ["--job", job["id"], "--vendor", job["vendor_id"] or "", "--url", url, "--answers", answers_file()]
+    else:
+        args = shlex.split(CMD) + ["--job", job["id"], "--vendor", job["vendor_id"] or "", "--kind", job["kind"]]
     try:
-        p = subprocess.run(args, capture_output=True, text=True, timeout=20 * 60)
+        p = subprocess.run(args, capture_output=True, text=True, timeout=25 * 60)
         last = (p.stdout.strip().splitlines() or ["{}"])[-1]
         res = json.loads(last) if last.startswith("{") else {"status": "failed", "note": last[:300]}
     except subprocess.TimeoutExpired:

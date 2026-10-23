@@ -54,7 +54,7 @@ const ADMIN_TABS = [
     "clients",
     "meetings",
     "cadence",
-    "references",
+    "client references",
     "time",
     "time bank",
     "reimbursables",
@@ -406,7 +406,7 @@ export default function MasterStudioConsole(p: Props) {
                 <GrowthDashboard db={db} openTab={setTab} />
             ) : tab === "inbox" ? (
                 <InboxTab db={db} focus={focus} />
-            ) : tab === "references" ? (
+            ) : tab === "client references" || tab === "references" ? (
                 <DesignReads db={db} focus={focus} />
             ) : tab === "proposals" ? (
                 <ProposalBuilder db={db} focus={focus} />
@@ -803,6 +803,7 @@ function MasterLog({ db, focus, setFocus, onNewClient, openTab }: any) {
                                 <th>Permit track</th>
                                 <th>Agencies</th>
                                 <th>Permit status</th>
+                                <th>Fees received</th>
                                 <th>Scheduling</th>
                             </tr>
                         </thead>
@@ -816,6 +817,7 @@ function MasterLog({ db, focus, setFocus, onNewClient, openTab }: any) {
                                         <td>{pl.track}</td>
                                         <td>{pl.agencies || "none ticked"}</td>
                                         <td>{pl.status}</td>
+                                        <td><FeeChecks db={db} pid={p.id} /></td>
                                         <td>
                                             {book ? (
                                                 <a href={book} target="_blank" rel="noopener noreferrer">
@@ -3151,6 +3153,7 @@ function FinanceEngine({ db, focus }: any) {
     }
     React.useEffect(() => {
         load()
+        const h = () => load(); window.addEventListener("fy-fees", h); return () => window.removeEventListener("fy-fees", h)
     }, [])
     const pname = (id: string) => projects.find((p: any) => p.id === id)?.title || "Studio / no project"
     const scoped = inv.filter((i) => !focus || i.project_id === focus)
@@ -3340,6 +3343,12 @@ function FinanceEngine({ db, focus }: any) {
                         </div>
                     )
                 })}
+            </div>
+
+            <div className="c">
+                <div className="mono">Fee schedule · tick a milestone when the money is in your account</div>
+                <p style={{ fontSize: 13.5, lineHeight: 1.6, margin: "6px 0 10px", maxWidth: 760 }}>No bank connection. Each tick books a paid invoice, splits it across the five buckets and shows up on the Dashboard. Payments that arrive another way can be typed into the <a href="https://docs.google.com/spreadsheets/d/1bXEeiQzd1iPAhAedenGe81RcV1oGCYMH7Kkf3bzdssA/edit" target="_blank" rel="noopener">FELEMAYE Revenue Ledger</a> sheet — the Drive bridge brings those rows in every 15 minutes.</p>
+                {projects.filter((p: any) => !focus || p.id === focus).map((p: any) => <div key={p.id} className="r" style={{ justifyContent: "space-between", padding: "8px 0", borderTop: ".5px solid color-mix(in srgb,var(--ink) 18%,transparent)" }}><b style={{ fontSize: 14 }}>{p.title}</b><FeeChecks db={db} pid={p.id} /></div>)}
             </div>
 
             <form onSubmit={addInvoice} className="c">
@@ -4828,6 +4837,8 @@ ${A.summary ? `<p style="font-size:14px;margin:12px 0 0">${esc(A.summary)}</p>` 
 ${row("Setback — front", z.setback_front_ft, prop.front, " ft")}${row("Setback — side", z.setback_side_ft, prop.side, " ft")}${row("Setback — rear", z.setback_rear_ft, prop.rear, " ft")}
 ${row("Building height", z.height_cap_ft, prop.height, " ft")}${row("Front-yard fence / wall", z.wall_height_cap_in, prop.wall_in, " in")}
 ${row("FAR", z.far_allowable, prop.far_proposed)}</table>
+${(A.numbers || []).length ? `<h2>Zoning numbers</h2><table><tr><th>Item</th><th>Unit</th><th>Code</th><th>Governing</th><th>Option A</th><th>Option B</th><th>Basis</th><th>Status</th></tr>${A.numbers.map((r: any) => `<tr><td>${esc(r.item)}</td><td>${esc(r.unit)}</td><td>${esc(r.code)}</td><td><b>${esc(r.governing)}</b></td><td>${esc(r.option_a)}</td><td>${esc(r.option_b)}</td><td><small>${esc(r.basis)}</small></td><td>${esc(String(r.status || "").replace("_", " "))}</td></tr>`).join("")}</table>` : ""}
+${(A.scenarios || []).length ? `<h2>Scenarios</h2><table><tr><th>ID</th><th>Scenario</th><th>Solid in</th><th>Total ft</th><th>Open %</th><th>Path</th><th>Weeks</th><th>Verdict</th></tr>${A.scenarios.map((x: any) => `<tr><td>${esc(x.id)}</td><td><b>${esc(x.name)}</b><br><small>${esc(x.why)}</small></td><td>${x.solid_in ?? "—"}</td><td>${x.total_ft ?? "—"}</td><td>${x.open_pct ?? "—"}</td><td>${esc(x.path)}</td><td>${esc(x.weeks)}</td><td class="${x.verdict === "works" ? "ok" : x.verdict === "does_not_work" ? "no" : ""}">${esc(String(x.verdict || "").replace(/_/g, " "))}</td></tr>`).join("")}</table>` : ""}
 <div class="cols" style="margin-top:14px">
 <div class="box"><h2>Permitted by right</h2><ul>${list(A.allowed)}</ul></div>
 <div class="box red"><h2>Non-negotiable</h2><ul>${list(A.non_negotiables)}</ul></div>
@@ -4975,6 +4986,7 @@ function ZoningMuniEngine({ db, focus }: any) {
                         ))}
                     </div>
                     <Analysis A={draft.analysis || {}} />
+                    <ZoningNumbers A={draft.analysis || {}} />
                 </div>
             )}
 
@@ -4985,7 +4997,7 @@ function ZoningMuniEngine({ db, focus }: any) {
                     <div key={a.id} className="c v4-panel">
                         <div className="r" style={{ justifyContent: "space-between" }}>
                             <button className="b g" onClick={() => setOpen(isOpen ? null : a.id)} style={{ textAlign: "left" }} aria-expanded={isOpen}>
-                                {isOpen ? "▾" : "▸"} {a.zone_class || "Analysis"} {(a.overlays || []).length ? "· " + a.overlays.join(" · ") : ""} · {new Date(a.created_at).toLocaleDateString()}
+                                {isOpen ? "▾" : "▸"} v{a.version || 1} · {a.zone_class || "Analysis"} {(a.overlays || []).length ? "· " + a.overlays.join(" · ") : ""} · {new Date(a.created_at).toLocaleDateString()}{audits.some((x) => x.supersedes === a.id) ? ` · superseded by v${audits.find((x) => x.supersedes === a.id)?.version}` : ""}
                             </button>
                             <div className="r">
                                 <span className="tag">{a.status}</span>
@@ -4995,6 +5007,15 @@ function ZoningMuniEngine({ db, focus }: any) {
                         </div>
                         {isOpen && <div style={{ marginTop: 10 }}>
                             <Analysis A={A} />
+                            <ZoningNumbers A={A} />
+                            {((A.numbers || []).length > 0 || (A.revit || []).length > 0) && (() => { const X = revitExports(project, a); return (
+                                <div className="r" style={{ marginTop: 6 }}>
+                                    <span className="mono">For Revit:</span>
+                                    {(A.revit || []).length > 0 && <><button className="b g" onClick={X.shared}>Shared parameter file (.txt)</button><button className="b g" onClick={X.values}>Project Information values (.csv)</button></>}
+                                    {(A.numbers || []).length > 0 && <button className="b g" onClick={X.numbers}>Numbers (.csv)</button>}
+                                    {(A.scenarios || []).length > 0 && <button className="b g" onClick={X.scenarios}>Scenarios (.csv)</button>}
+                                </div>) })()}
+                            {!audits.some((x) => x.supersedes === a.id) && <ZoningUpdate db={db} a={a} pid={pid} onSaved={load} setMsg={setMsg} />}
                             {(a.source_files || []).length > 0 && <p className="v4-note">From: {a.source_files.join(", ")}</p>}
                             <div className="mono" style={{ marginTop: 12 }}>Proposed values for the sheet</div>
                             <div className="v4-grid">{[["front", "Front setback ft"], ["side", "Side ft"], ["rear", "Rear ft"], ["height", "Height ft"], ["wall_in", "Fence/wall in"], ["far_proposed", "FAR"]].map(([k, l]) => <label className="v4-field" key={k}><span className="mono">{l}</span><input value={prop[k] || ""} onChange={(e) => setProp({ ...prop, [k]: e.target.value })} /></label>)}</div>
@@ -7139,8 +7160,8 @@ function GrowthDashboard({ db, openTab }: any) {
         const [d, t, i, l, f, o] = await Promise.all([
             db.from("pipeline_deals").select("*").order("updated_at", { ascending: false }),
             db.from("studio_targets").select("*").order("year"),
-            db.from("invoices").select("id,project_id,amount,amount_paid,status,issued_at,paid_at"),
-            db.from("lead_signals").select("*").in("status", ["new", "reviewing", "pursue"]).order("score", { ascending: false, nullsFirst: false }).limit(30),
+            db.from("invoices").select("*"),
+            db.from("lead_signals").select("id").limit(1),
             db.from("follow_up_reminders").select("*").eq("status", "open").order("due_on").limit(30),
             db.from("studio_reimbursables").select("amount,spent_on,bucket").eq("bucket", "studio_opex").gte("spent_on", `${year}-01-01`),
         ])
@@ -7148,7 +7169,7 @@ function GrowthDashboard({ db, openTab }: any) {
         setDeals(d.data || []); setTargets(t.data || []); setInvoices(i.data || []); setLeads(l.data || []); setFollow(f.data || [])
         setOpex((o.data || []).reduce((a: number, r: any) => a + Number(r.amount), 0))
     }, [db, year])
-    React.useEffect(() => { load() }, [load])
+    React.useEffect(() => { load(); const h = () => load(); window.addEventListener("fy-fees", h); return () => window.removeEventListener("fy-fees", h) }, [load])
     const tgt = targets.find((t) => t.year === year) || { revenue_target: 0, profit_target: 0, max_weekly_hours: 40, max_active_projects: 3, avg_fee_target: 0 }
     const collected = invoices.filter((i) => i.paid_at && String(i.paid_at).startsWith(String(year))).reduce((a, i) => a + Number(i.amount_paid ?? i.amount ?? 0), 0)
     const outstanding = invoices.filter((i) => i.status !== "paid" && i.status !== "void" && i.issued_at).reduce((a, i) => a + Number(i.amount || 0) - Number(i.amount_paid || 0), 0)
@@ -7216,7 +7237,7 @@ function GrowthDashboard({ db, openTab }: any) {
 
                 <div className="os-grid" style={{ marginTop: 14 }}>
                     <div className="c">
-                        <div className="mono">Revenue forecast · next 12 months</div>
+                        <div className="mono">Pipeline forecast · deals board · next 12 months</div>
                         <div className="os-bar" style={{ marginTop: 14, marginBottom: 26 }}>
                             {monthlyTarget > 0 && <div className="os-line" style={{ bottom: `${(monthlyTarget / maxBar) * 142}px` }}><em>target {$0(monthlyTarget)}/mo</em></div>}
                             {months.map((m) => (
@@ -7294,20 +7315,11 @@ function GrowthDashboard({ db, openTab }: any) {
                     {msg && <p className="mono">{msg}</p>}
                 </div>
 
+                <VerticalForecast db={db} invoices={invoices} deals={deals} target={Number(tgt.revenue_target) || 0} />
+
+                <LeadsPanel db={db} onChange={load} />
+
                 <div className="os-grid">
-                    <div className="c">
-                        <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">Lead signals · LA + NY public permit filings</span><span className="r" style={{ gap: 8 }}><span className="mono">weekly · Mondays</span><button className="b g" onClick={async () => { const { error } = await db.rpc("run_lead_scout", { p_days: 7 }); setMsg(error ? error.message : "Lead scout started — new signals appear here in about a minute."); setTimeout(load, 60000) }}>Run now</button></span></div>
-                        {leads.map((l) => (
-                            <div key={l.id} style={{ padding: "10px 0", borderBottom: ".5px solid color-mix(in srgb,var(--ink) 18%,transparent)", fontSize: 14, lineHeight: 1.5 }}>
-                                <span className="os-pill">{l.market}</span><span className="os-pill">score {l.score ?? "–"}</span><b>{l.address}</b>{l.neighborhood ? ` · ${l.neighborhood}` : ""}
-                                <div style={{ opacity: 0.8 }}>{[l.permit_type, l.work_type].filter(Boolean).join(" · ")}{l.valuation ? ` · ${$0(l.valuation)}` : ""}{l.filed_on ? ` · ${l.filed_on}` : ""}</div>
-                                {l.description && <div style={{ opacity: 0.7, fontSize: 13 }}>{String(l.description).slice(0, 220)}</div>}
-                                {l.score_why && <div className="mono">{l.score_why}</div>}
-                                <div className="r" style={{ marginTop: 6 }}><button className="b" onClick={() => leadTo(l, "pursue")}>Pursue → pipeline</button><button className="b g" onClick={() => leadTo(l, "dismissed")}>Dismiss</button>{l.url && <a className="mono" href={l.url} target="_blank" rel="noopener">record ↗</a>}</div>
-                            </div>
-                        ))}
-                        {!leads.length && <p style={{ fontSize: 14, opacity: 0.75 }}>No new signals. The lead scout runs weekly (Mondays) and scores fresh permit filings against your rules: neighborhoods, project types and minimum valuation.</p>}
-                    </div>
                     <div className="c">
                         <div className="mono">Follow-ups due (from your Gmail)</div>
                         {follow.map((f) => (
@@ -7349,8 +7361,8 @@ const ACTIONS: Record<string, { label: string; you: string; button?: string }> =
     email_rep: { label: "No application form online", you: "Send the trade-request email (copy below) to the vendor's trade/sales address. When they reply, the daily inbox check files the rep automatically.", button: "Copy email" },
     fix_link: { label: "Bot landed on the wrong page", you: "Paste the real trade-program URL and press Retry. The bot applies on the next run.", button: "Save link & retry" },
     check_inbox: { label: "Submitted, no confirmation seen", you: "Search your inbox for the vendor name. If a confirmation is there, mark Pending; if not, press Retry.", button: "Mark pending" },
-    finish_form: { label: "Form needs a field the bot couldn't fill", you: "Open the form and finish it yourself (usually a dropdown, a document upload or a free-text box). Takes 2–4 minutes each.", button: "Open form" },
-    assist_captcha: { label: "reCAPTCHA needs a person", you: "Open the form and submit it yourself. The studio never bypasses CAPTCHAs.", button: "Open form" },
+    finish_form: { label: "Form needs a field the bot couldn't fill", you: "Answer the missing fields once below, then Prefill: the bot opens each form on your PC already filled in. You check it, adjust, and press Submit.", button: "Prefill on my PC" },
+    assist_captcha: { label: "reCAPTCHA needs a person", you: "Prefill opens the form on your PC with everything filled in; you tick the CAPTCHA and press Submit. The studio never bypasses CAPTCHAs.", button: "Prefill on my PC" },
     retry: { label: "Bot error (timeout / page change)", you: "Press Retry once. If it fails again it moves to finish_form.", button: "Retry" },
     find_link: { label: "No trade program found", you: "Check the site footer for Trade / Designers / Professionals. Paste a link if you find one; otherwise send the trade-request email.", button: "Save link & retry" },
 }
@@ -7382,6 +7394,15 @@ function VendorTriage({ db, compact, openTab }: any) {
         setMsg(error ? (/duplicate|unique/i.test(error.message) ? "Already queued." : error.message) : `Queued ${r.name}.`); load()
     }
     const pending = async (r: any) => { await db.from("trade_accounts").update({ status: "Pending", review_reason: null }).eq("id", r.trade_account_id); load() }
+    const [tick, setTick] = React.useState(0)
+    const jobs = useAssistJobs(db, tick)
+    const prefill = async (list: any[]) => {
+        const rows = list.filter((r) => !["queued", "claimed", "running"].includes(jobs[r.trade_account_id]?.status)).map((r) => ({ vendor_id: r.vendor_id, trade_account_id: r.trade_account_id, kind: "assist", payload: { url: r.application_url || r.website, reason: r.review_reason } }))
+        if (!rows.length) return setMsg("Already queued.")
+        const { error } = await db.from("trade_jobs").insert(rows)
+        setMsg(error ? (/kind_check|payload/.test(error.message) ? NEEDS_D : error.message) : `Queued ${rows.length} form${rows.length > 1 ? "s" : ""}. With the trade poller running on your PC they open one at a time, filled in; review, adjust and submit each, then mark it Pending here.`)
+        setTick((t) => t + 1)
+    }
     const retryAll = async () => { const list = rows.filter((r) => r.action === "retry"); for (const r of list) await db.from("trade_jobs").insert({ vendor_id: r.vendor_id, trade_account_id: r.trade_account_id, kind: "apply" }); setMsg(`Queued ${list.length} retries.`); load() }
     const order = ["finish_form", "assist_captcha", "fix_link", "check_inbox", "email_rep", "find_link", "retry"]
     return (
@@ -7399,6 +7420,15 @@ function VendorTriage({ db, compact, openTab }: any) {
                     ))}
                 </div>
                 {act === "retry" && <button className="b" style={{ marginTop: 10 }} onClick={retryAll}>Retry all {counts.retry}</button>}
+                {(act === "finish_form" || act === "assist_captcha") && (
+                    <>
+                        {act === "finish_form" && <TradeAnswers db={db} />}
+                        <div className="r" style={{ marginTop: 10 }}>
+                            <button className="b" onClick={() => prefill(rows.filter((r) => r.action === act))}>Prefill all {counts[act]} on my PC</button>
+                            <span className="mono">Opens one form at a time in a visible browser on your PC · nothing is submitted for you</span>
+                        </div>
+                    </>
+                )}
                 {(act === "email_rep" || act === "find_link") && (
                     <div style={{ marginTop: 10 }}>
                         <textarea readOnly value={TRADE_EMAIL} rows={9} style={{ width: "100%", fontSize: 13 }} />
@@ -7414,7 +7444,11 @@ function VendorTriage({ db, compact, openTab }: any) {
                                     <td style={{ fontSize: 12, maxWidth: 320 }}>{String(r.review_reason || r.discovery_status || "").replace(/^Trade Bot [\d-]+:\s*/, "")}</td>
                                     <td className="r" style={{ gap: 6 }}>
                                         {(act === "fix_link" || act === "find_link") && <><input placeholder="https://…/trade" value={links[r.trade_account_id] || ""} onChange={(e) => setLinks({ ...links, [r.trade_account_id]: e.target.value })} style={{ minWidth: 180 }} /><button className="b" onClick={() => retry(r, links[r.trade_account_id])} disabled={!links[r.trade_account_id]}>Save & retry</button></>}
-                                        {(act === "finish_form" || act === "assist_captcha") && <a className="b" href={r.application_url || r.website} target="_blank" rel="noopener">Open form</a>}
+                                        {(act === "finish_form" || act === "assist_captcha") && <>
+                                            <button className="b" onClick={() => prefill([r])} disabled={["queued", "claimed", "running"].includes(jobs[r.trade_account_id]?.status)}>Prefill on my PC</button>
+                                            {jobs[r.trade_account_id] && <span className="mono">{JOB_LABEL[jobs[r.trade_account_id].status] || jobs[r.trade_account_id].status}{jobs[r.trade_account_id].result?.filled != null ? ` · ${jobs[r.trade_account_id].result.filled} filled, ${(jobs[r.trade_account_id].result.missing || []).length} left` : ""}</span>}
+                                            <a className="mono" href={r.application_url || r.website} target="_blank" rel="noopener">blank form ↗</a>
+                                        </>}
                                         {(act === "finish_form" || act === "assist_captcha" || act === "check_inbox") && <button className="b g" onClick={() => pending(r)}>Submitted → Pending</button>}
                                         {act === "check_inbox" && <a className="b g" href={`https://mail.google.com/mail/u/0/#search/${encodeURIComponent(r.name)}`} target="_blank" rel="noopener">Search inbox</a>}
                                         {(act === "retry" || act === "check_inbox") && <button className="b g" onClick={() => retry(r)}>Retry</button>}
@@ -7525,13 +7559,13 @@ function DesignReads({ db, focus }: any) {
         if (!pid) return
         const [r, f] = await Promise.all([
             db.from("design_reads").select("*").eq("project_id", pid).order("created_at", { ascending: false }),
-            db.from("project_files").select("id,name,path,direction,category,created_at").eq("project_id", pid).order("name"),
+            db.from("project_files").select("*").eq("project_id", pid).order("name"),
         ])
         if (isMissing(r.error)) return setErr(r.error)
         setReads(r.data || []); setCur((c) => c || r.data?.[0]?.id || "")
-        const imgs = (f.data || []).filter((x: any) => x.category === "images" || /\.(jpe?g|png|webp|heic)$/i.test(x.path || "") || /^Reference/i.test(x.name || ""))
+        const imgs = (f.data || []).filter((x: any) => x.mime_type !== "not_image" && (x.category === "images" || x.category === "reference" || /\.(jpe?g|png|webp|heic)$/i.test(x.path || "") || /^Reference/i.test(x.name || "")))
         setFiles(imgs)
-        const stor = imgs.filter((x: any) => !String(x.path).startsWith("ext:")).map((x: any) => x.path)
+        const stor = imgs.flatMap((x: any) => [x.thumb_path, x.drive_id ? `${x.project_id}/studio/previews/${x.drive_id}.jpg` : null, String(x.path).startsWith("ext:") ? null : x.path]).filter(Boolean)
         if (stor.length) {
             const { data } = await db.storage.from("project-files").createSignedUrls(stor, 3600)
             const m: Record<string, string> = {}; (data || []).forEach((d: any) => d.signedUrl && (m[d.path] = d.signedUrl)); setThumbs(m)
@@ -7539,9 +7573,17 @@ function DesignReads({ db, focus }: any) {
     }, [db, pid])
     React.useEffect(() => { setCur(""); load() }, [pid, load])
     const read = reads.find((r) => r.id === cur)
+    const signed = (f: any) => thumbs[f.thumb_path] || (f.drive_id ? thumbs[`${f.project_id}/studio/previews/${f.drive_id}.jpg`] : "") || thumbs[f.path] || ""
+    const shownUrl = (f: any) => signed(f) || (f.drive_id ? `https://drive.google.com/thumbnail?id=${f.drive_id}&sz=w600` : "")
+    const [trade, setTrade] = React.useState<Record<string, string>>({})
+    React.useEffect(() => {
+        const names = Array.from(new Set(((reads.find((r) => r.id === cur)?.read?.products) || []).map((p: any) => p.vendor).filter(Boolean)))
+        if (!names.length) return
+        db.from("vendors").select("name,trade_accounts(status)").in("name", names).then(({ data }: any) => { const m: Record<string, string> = {}; (data || []).forEach((v: any) => (m[v.name] = v.trade_accounts?.[0]?.status || "no account")); setTrade(m) }, () => {})
+    }, [db, reads, cur])
     async function newRead() {
-        const imgs = files.filter((f) => thumbs[f.path]).slice(0, 20).map((f) => ({ name: String(f.name || "").replace(/^Reference · /, ""), url: thumbs[f.path] }))
-        if (!imgs.length) return setMsg("None of this project's references are uploaded to the portal yet — they are Drive links, which the analysis can't open. Ask the client to upload them in Files (or drop them in yourself), then run a new read.")
+        const imgs = files.filter((f) => signed(f)).slice(0, 20).map((f) => ({ name: String(f.name || "").replace(/^Reference · /, ""), url: signed(f) }))
+        if (!imgs.length) return setMsg("No cached copies yet. The Drive bridge makes one for each Drive image on its next 15-minute run (or run cacheThumbnailsNow in the script once); images uploaded to the portal work right away.")
         setBusy(true); setMsg("Reading " + imgs.length + " images…")
         const { data, error } = await db.functions.invoke("zoning-analyze", { body: { mode: "references", project_id: pid, images: imgs, notes } })
         setBusy(false)
@@ -7556,27 +7598,26 @@ function DesignReads({ db, focus }: any) {
     const list = (k: string, title: string) => (R[k] || []).length ? (
         <div className="c"><div className="mono">{title}</div><ul style={{ margin: "8px 0 0", paddingLeft: 18, fontSize: 15 }}>{R[k].map((x: any, i: number) => <li key={i} style={{ margin: "6px 0" }}>{typeof x === "string" ? x : JSON.stringify(x)}</li>)}</ul></div>
     ) : null
-    const printRead = () => printHtml(read.title, `<h1>${esc(read.title)}</h1><div class="rule"></div><p>${esc(read.summary)}</p>${(R.directions || []).map((d: any) => `<h2>${esc(d.name)}</h2><p>${esc(d.what)}</p>`).join("")}<h2>Materials</h2><table><thead><tr><th>Item</th><th>Specification</th><th>Why</th></tr></thead><tbody>${(R.materials || []).map((m: any) => `<tr><td>${esc(m.item)}</td><td>${esc(m.spec)}</td><td>${esc(m.why)}</td></tr>`).join("")}</tbody></table><h2>Palette</h2><p>${(R.palette || []).map((c: any) => `<span style="display:inline-block;width:14pt;height:14pt;background:${esc(c.hex)};vertical-align:middle;margin-right:4pt"></span>${esc(c.name)} ${esc(c.hex)}`).join(" &nbsp; ")}</p>${["tensions", "sd_moves", "questions", "keep_out"].map((k) => (R[k] || []).length ? `<h2>${({ tensions: "Tensions", sd_moves: "Schematic moves", questions: "Questions for the client", keep_out: "Keep out" } as any)[k]}</h2><ul>${R[k].map((x: string) => `<li>${esc(x)}</li>`).join("")}</ul>` : "").join("")}<p class="m">Internal · not for client distribution</p>`)
+    const printRead = () => printHtml(read.title, `<h1>${esc(read.title)}</h1><div class="rule"></div><p>${esc(read.summary)}</p>${(R.board || []).length ? `<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6pt;margin:10pt 0">${R.board.map((b: any) => `<div><img src="${esc(b.img)}" style="width:100%;aspect-ratio:4/5;object-fit:cover"><div style="font-size:8pt">${esc(b.title)} · <i>${esc(b.credit)}</i></div></div>`).join("")}</div>` : ""}${(R.products || []).length ? `<h2>Products to test</h2><table><thead><tr><th>Item</th><th>Product</th><th>Format / finish</th><th>Vendor</th></tr></thead><tbody>${R.products.map((p: any) => `<tr><td>${esc(p.item)}</td><td><b>${esc(p.product)}</b><br>${esc(p.maker)}</td><td>${esc(p.format)}<br>${esc(p.finish)}</td><td>${esc(p.vendor)}</td></tr>`).join("")}</tbody></table>` : ""}${(R.directions || []).map((d: any) => `<h2>${esc(d.name)}</h2><p>${esc(d.what)}</p>`).join("")}<h2>Materials</h2><table><thead><tr><th>Item</th><th>Specification</th><th>Why</th></tr></thead><tbody>${(R.materials || []).map((m: any) => `<tr><td>${esc(m.item)}</td><td>${esc(m.spec)}</td><td>${esc(m.why)}</td></tr>`).join("")}</tbody></table><h2>Palette</h2><p>${(R.palette || []).map((c: any) => `<span style="display:inline-block;width:14pt;height:14pt;background:${esc(c.hex)};vertical-align:middle;margin-right:4pt"></span>${esc(c.name)} ${esc(c.hex)}`).join(" &nbsp; ")}</p>${["tensions", "sd_moves", "questions", "keep_out"].map((k) => (R[k] || []).length ? `<h2>${({ tensions: "Tensions", sd_moves: "Schematic moves", questions: "Questions for the client", keep_out: "Keep out" } as any)[k]}</h2><ul>${R[k].map((x: string) => `<li>${esc(x)}</li>`).join("")}</ul>` : "").join("")}<p class="m">Internal · not for client distribution</p>`)
     const pname = (id: string) => projects.find((p) => p.id === id)?.title || ""
     return (
         <div>
             <OSStyle />
-            <p style={{ maxWidth: 760, lineHeight: 1.7, fontSize: 15 }}>Internal. What the client's reference images point to, turned into materials, a palette and moves to test in Schematic Design. The client never sees this page.</p>
+            <IntelStyle />
+            <p style={{ maxWidth: 760, lineHeight: 1.7, fontSize: 15 }}>Client references — internal. Her images, what they point to, and the products and moves to test in Schematic Design. The client never sees this page.</p>
             <div className="r" style={{ marginBottom: 12 }}>
                 {projects.map((p) => <button key={p.id} className={"b" + (pid === p.id ? "" : " g")} onClick={() => setPid(p.id)}>{p.title}</button>)}
             </div>
             <Gate err={err}>
                 <div className="c">
                     <div className="r" style={{ justifyContent: "space-between" }}>
-                        <span className="mono">{files.length} reference images · {Object.keys(thumbs).length} uploaded to the portal · {files.length - Object.keys(thumbs).length} Drive links</span>
+                        <span className="mono">{files.length} reference images · {files.filter((f) => signed(f)).length} stored copies · {files.filter((f) => !signed(f) && f.drive_id).length} shown from Drive</span>
                         <span className="r" style={{ gap: 8 }}>
                             <select value={cur} onChange={(e) => setCur(e.target.value)} aria-label="Saved reads">{reads.map((r) => <option key={r.id} value={r.id}>{r.title}{r.status === "adopted" ? " · adopted" : ""}</option>)}</select>
                         </span>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(120px,1fr))", gap: 6, marginTop: 10 }}>
-                        {files.map((f) => thumbs[f.path]
-                            ? <a key={f.id} href={thumbs[f.path]} target="_blank" rel="noopener" title={f.name} style={{ display: "block", aspectRatio: "1", background: `center/cover no-repeat url("${thumbs[f.path]}")` }} />
-                            : <a key={f.id} href={String(f.path).replace(/^ext:/, "")} target="_blank" rel="noopener" title={f.name} style={{ display: "grid", placeItems: "center", aspectRatio: "1", padding: 8, fontSize: 12, lineHeight: 1.35, textAlign: "center", border: ".5px solid color-mix(in srgb,var(--ink) 30%,transparent)", color: "inherit", textDecoration: "none" }}>{String(f.name || "").replace(/^Reference · /, "")} ↗</a>)}
+                    <div className="fy-refs" style={{ marginTop: 10 }}>
+                        {files.map((f) => <RefImage key={f.id} f={f} url={shownUrl(f)} />)}
                     </div>
                     <textarea rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes for the next read (what she said in person, what to ignore)…" style={{ width: "100%", marginTop: 10 }} />
                     <div className="r" style={{ marginTop: 8 }}>
@@ -7595,6 +7636,10 @@ function DesignReads({ db, focus }: any) {
                             {(R.palette || []).length > 0 && <div className="r" style={{ gap: 12, marginTop: 6 }}>{R.palette.map((c: any) => <span key={c.hex + c.name} style={{ display: "inline-flex", alignItems: "center", gap: 8, fontSize: 13 }}><i style={{ width: 28, height: 28, background: c.hex, border: ".5px solid color-mix(in srgb,var(--ink) 30%,transparent)", display: "inline-block" }} />{c.name} <span className="mono">{c.hex}</span></span>)}</div>}
                         </div>
                         {(R.directions || []).length > 0 && <div className="os-grid">{R.directions.map((d: any) => <div key={d.name} className="c"><div className="mono">Direction</div><h3 style={{ margin: "6px 0", fontSize: 20, fontWeight: 500 }}>{d.name}</h3><p style={{ fontSize: 15, lineHeight: 1.65, margin: 0 }}>{d.what}</p>{(d.refs || []).length > 0 && <p className="mono" style={{ marginTop: 8 }}>{d.refs.join(" · ")}</p>}</div>)}</div>}
+                        {(R.board || []).length > 0 && <div className="c"><div className="mono">Mood board · {R.board.length} images to start from</div>
+                            <div className="fy-board" style={{ marginTop: 10 }}>{R.board.map((b: any, i: number) => <figure key={i}><a href={b.link || b.img} target="_blank" rel="noopener"><img src={b.img} alt={b.title} loading="lazy" /></a><figcaption>{b.title}<small>{b.theme} · {b.credit}</small></figcaption></figure>)}</div>
+                            <p className="mono" style={{ marginTop: 8 }}>Unsplash photos, free to use with credit. Drag any image into Milanote, Pinterest or InDesign; Print / PDF lays the board out with the products.</p></div>}
+                        {(R.products || []).length > 0 && <div className="c tw"><div className="mono">Products to test · tied to your vendor list</div><table style={{ marginTop: 8 }}><thead><tr><th>Item</th><th>Product</th><th>Format & finish</th><th>Vendor · trade</th><th>Why</th></tr></thead><tbody>{R.products.map((p: any, i: number) => <tr key={i}><td><b>{p.item}</b></td><td>{p.url ? <a href={p.url} target="_blank" rel="noopener">{p.product} ↗</a> : p.product}<div className="mono">{p.maker}</div></td><td style={{ fontSize: 13 }}>{p.format}<div style={{ opacity: 0.75 }}>{p.finish}</div></td><td>{p.vendor}{p.vendor && <div className="mono">{trade[p.vendor] || "—"}</div>}</td><td style={{ fontSize: 13, opacity: 0.85 }}>{p.why}</td></tr>)}</tbody></table></div>}
                         {(R.materials || []).length > 0 && <div className="c tw"><div className="mono">Materials · draft specifications</div><table style={{ marginTop: 8 }}><thead><tr><th>Item</th><th>Specification</th><th>Why</th></tr></thead><tbody>{R.materials.map((m: any, i: number) => <tr key={i}><td><b>{m.item}</b></td><td>{m.spec}</td><td style={{ opacity: 0.8 }}>{m.why}</td></tr>)}</tbody></table></div>}
                         <div className="os-grid">{list("elements", "Elements to test")}{list("keep_out", "Keep out")}{list("tensions", "Tensions · zoning, house, budget")}{list("sd_moves", "Schematic moves")}{list("questions", "Ask the client before SD")}</div>
                         {(R.images_not_seen || []).length > 0 && <p className="mono">Not yet read (files too large to preview): {R.images_not_seen.join(" · ")}</p>}
@@ -7602,5 +7647,467 @@ function DesignReads({ db, focus }: any) {
                 ) : <p style={{ fontSize: 15 }}>No read yet for this project.</p>}
             </Gate>
         </div>
+    )
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   STUDIO INTEL (2026-10-23d) — fee checkboxes, revenue by vertical, lead signals with type and fit,
+   trade-bot prefill queue, zoning numbers / scenarios / evidence / Revit export, client-reference products.
+   Needs 20261023d_felemaye_studio_intel.sql.
+   ════════════════════════════════════════════════════════════════════════════ */
+const NEEDS_D = "This panel needs the 2026-10-23d update. Open Supabase › SQL editor and run 20261023d_felemaye_studio_intel.sql (safe to re-run)."
+function GateD({ err, children }: any) { return err ? <div className="os-warn">{NEEDS_D}</div> : children }
+const INTEL_CSS = `
+.fy-fees{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.fy-fee{display:inline-flex;align-items:center;gap:6px;border:.5px solid color-mix(in srgb,var(--ink) 40%,transparent);padding:4px 9px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.fy-fee.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.fy-fee input{margin:0;accent-color:var(--accent)}
+.fy-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.fy-chips button{all:unset;cursor:pointer;border:.5px solid color-mix(in srgb,var(--ink) 40%,transparent);padding:5px 10px;font:11px ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase}
+.fy-chips button[aria-pressed=true]{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+.fy-fit{display:inline-block;padding:2px 8px;font:10.5px ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;margin:2px 4px 2px 0;border:1px solid currentColor}
+.fy-fit.lead{color:var(--moss-hi,#4E7A45)}.fy-fit.partner{color:var(--ochre,#8A5A1C)}.fy-fit.consult{color:var(--slate-hi,#4A6378)}
+.fy-lead{padding:12px 0;border-bottom:.5px solid color-mix(in srgb,var(--ink) 18%,transparent);font-size:14px;line-height:1.55}
+.fy-num td,.fy-num th{font-size:13px;vertical-align:top}
+.fy-num td.n{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.fy-num input{width:86px;font-size:13px;padding:3px 5px;text-align:right}
+.fy-num tr.vh td{border-top:1px solid var(--ink);font-weight:600;padding-top:10px}
+.fy-verdict{display:inline-block;padding:2px 8px;font:10.5px ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;border:1px solid currentColor}
+.fy-verdict.works{color:var(--moss-hi,#4E7A45)}.fy-verdict.conditional{color:var(--ochre,#8A5A1C)}.fy-verdict.does_not_work{color:var(--oxblood-hi,#A23B32)}
+.fy-status{font:10.5px ui-monospace,Menlo,monospace;letter-spacing:.06em;text-transform:uppercase}
+.fy-status.conflict{color:var(--oxblood-hi,#A23B32)}.fy-status.to_verify{color:var(--ochre,#8A5A1C)}.fy-status.confirmed{color:var(--moss-hi,#4E7A45)}
+.fy-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:10px}
+.fy-board figure{margin:0}.fy-board img{display:block;width:100%;aspect-ratio:4/5;object-fit:cover;background:color-mix(in srgb,var(--ink) 8%,transparent)}
+.fy-board figcaption{font-size:12.5px;line-height:1.4;margin-top:6px}.fy-board figcaption small{display:block;opacity:.65;font-size:11px}
+.fy-refs{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(46%,140px),1fr));gap:6px}
+.fy-refs a{display:block;aspect-ratio:1;position:relative;color:inherit;text-decoration:none;overflow:hidden;border:.5px solid color-mix(in srgb,var(--ink) 25%,transparent)}
+.fy-refs img{width:100%;height:100%;object-fit:cover;display:block}
+.fy-refs span{position:absolute;inset:auto 0 0 0;padding:6px 7px;font-size:11px;line-height:1.3;background:color-mix(in srgb,var(--paper) 86%,transparent)}
+.fy-refs .tile{display:grid;place-items:center;height:100%;padding:8px;font-size:12px;text-align:center;line-height:1.35}
+.fy-stack{display:flex;align-items:flex-end;gap:4px;height:160px;border-bottom:.5px solid var(--ink);position:relative;margin:14px 0 26px}
+.fy-stack>div{flex:1;display:flex;flex-direction:column-reverse;min-width:0;position:relative}
+.fy-stack i{position:absolute;bottom:-18px;left:0;right:0;text-align:center;font:9px ui-monospace,Menlo,monospace;opacity:.65;font-style:normal}
+.fy-legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px}.fy-legend b{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+@media(max-width:700px){.fy-num input{width:70px}}
+`
+function IntelStyle() { return <style>{INTEL_CSS}</style> }
+
+/* ───────────── Fees received (milestone checkboxes → invoices) ───────────── */
+function FeeChecks({ db, pid }: any) {
+    const [rows, setRows] = React.useState<any[]>([])
+    const [err, setErr] = React.useState<any>(null)
+    const [busy, setBusy] = React.useState("")
+    const [msg, setMsg] = React.useState("")
+    const load = React.useCallback(async () => {
+        if (!pid) return
+        const { data, error } = await db.from("v_project_fees").select("*").eq("project_id", pid).order("seq")
+        if (error) return setErr(error)
+        setRows(data || [])
+    }, [db, pid])
+    React.useEffect(() => { load(); const h = () => load(); window.addEventListener("fy-fees", h); return () => window.removeEventListener("fy-fees", h) }, [load])
+    if (err) return <span className="mono" title={NEEDS_D}>fees · run 20261023d</span>
+    if (!rows.length) return <span className="mono">no fee schedule</span>
+    const got = rows.filter((r) => r.paid).reduce((a, r) => a + Number(r.fee_amount || 0), 0)
+    const total = rows.reduce((a, r) => a + Number(r.fee_amount || 0), 0)
+    const toggle = async (r: any) => {
+        setBusy(r.phase_code); setMsg("")
+        const { error } = await db.rpc("studio_set_fee_paid", { p_project: pid, p_phase: r.phase_code, p_paid: !r.paid })
+        setBusy("")
+        if (error) return setMsg(error.message)
+        window.dispatchEvent(new Event("fy-fees"))
+    }
+    return (
+        <div className="fy-fees">
+            <IntelStyle />
+            {rows.map((r) => (
+                <label key={r.phase_code} className={"fy-fee" + (r.paid ? " on" : "")} title={r.paid ? `Received${r.paid_at ? " " + new Date(r.paid_at).toLocaleDateString() : ""} · ${r.number || ""} — untick to reverse` : "Tick when the payment is in your account"}>
+                    <input type="checkbox" checked={!!r.paid} disabled={busy === r.phase_code} onChange={() => toggle(r)} />
+                    {r.seq === 1 ? "Retainer" : r.phase_code} {$0(r.fee_amount)}
+                </label>
+            ))}
+            <span className="mono">{$0(got)} of {$0(total)}</span>
+            {msg && <span className="mono" style={{ color: "var(--oxblood-hi)" }}>{msg}</span>}
+        </div>
+    )
+}
+
+/* ───────────── Revenue forecast by vertical ───────────── */
+const VERTICALS: [string, string, string][] = [
+    ["SD", "Spatial Design & Interiors", "#C9935E"], ["VG", "Vignettes (staging)", "#B4643C"], ["PF", "FF&E Procurement", "#9C8A6C"],
+    ["SL", "Surface Library", "#7F8E62"], ["BV", "BIM / VDC", "#5F7A8A"], ["CS", "Creative Strategy", "#B39A4F"],
+    ["TA", "Talent Alignment", "#8FA06D"], ["CI", "Critical Inquiry", "#9A7D63"], ["MA", "Media Archives", "#7C8577"], ["RD", "Radical Delusions Lab", "#A0664E"],
+]
+const vLabel = (c: string) => VERTICALS.find((v) => v[0] === c)?.[1] || c
+const vColor = (c: string) => VERTICALS.find((v) => v[0] === c)?.[2] || "#888"
+function VerticalForecast({ db, invoices, deals, target }: any) {
+    const [lines, setLines] = React.useState<any[]>([])
+    const [err, setErr] = React.useState<any>(null)
+    const [msg, setMsg] = React.useState("")
+    const [open, setOpen] = React.useState<Record<string, boolean>>({})
+    const [add, setAdd] = React.useState<any>(null)
+    const load = React.useCallback(async () => {
+        const { data, error } = await db.from("revenue_lines").select("*").order("sort").order("line_item")
+        if (error) return setErr(error)
+        setLines(data || [])
+    }, [db])
+    React.useEffect(() => { load() }, [load])
+    const year = new Date().getFullYear()
+    const months: { key: string; label: string }[] = []
+    const base = new Date(); base.setDate(1)
+    for (let i = 0; i < 12; i++) { const m = new Date(base.getFullYear(), base.getMonth() + i, 1); months.push({ key: m.toISOString().slice(0, 7), label: m.toLocaleString([], { month: "short" }) }) }
+    const perMonth = (l: any) => (l.active ? (Number(l.unit_price) * Number(l.qty_per_year) * Number(l.probability)) / 12 : 0)
+    const lineMonths = (l: any) => months.map((m) => (m.key >= String(l.start_month).slice(0, 7) ? perMonth(l) : 0))
+    const exp12 = (l: any) => lineMonths(l).reduce((a, b) => a + b, 0)
+    // known pipeline (deals board) for SD: won + probability-weighted, spread over each deal's weeks
+    const pipe = months.map(() => 0)
+    ;(deals || []).filter((d: any) => d.stage !== "lost" && d.est_fee && d.expected_start).forEach((d: any) => {
+        const weeks = Math.max(1, Number(d.duration_weeks || 12)), per = Number(d.est_fee) / weeks, p = d.stage === "won" ? 1 : prob(d)
+        for (let w = 0; w < weeks; w++) { const k = addDaysOS(d.expected_start, w * 7).toISOString().slice(0, 7); const i = months.findIndex((m) => m.key === k); if (i >= 0) pipe[i] += per * p }
+    })
+    const invoicedSD = (invoices || []).filter((i: any) => i.status !== "void").reduce((a: number, i: any) => a + Number(i.amount || 0), 0)
+    const collectedBy: Record<string, number> = {}
+    ;(invoices || []).filter((i: any) => i.paid_at && String(i.paid_at).startsWith(String(year))).forEach((i: any) => { const v = i.vertical || "SD"; collectedBy[v] = (collectedBy[v] || 0) + Number(i.amount_paid ?? i.amount ?? 0) })
+    const byV = VERTICALS.map(([c]) => {
+        const ls = lines.filter((l) => l.vertical === c)
+        const m = months.map((_, i) => ls.reduce((a, l) => a + lineMonths(l)[i], 0) + (c === "SD" ? pipe[i] : 0))
+        return { c, ls, m, total: m.reduce((a, b) => a + b, 0) }
+    })
+    const grand = byV.reduce((a, v) => a + v.total, 0)
+    const max = Math.max(1, ...months.map((_, i) => byV.reduce((a, v) => a + v.m[i], 0)), Number(target || 0) / 12)
+    const save = async (l: any, k: string, v: any) => {
+        const val = ["unit_price", "qty_per_year", "probability"].includes(k) ? Number(v) : v
+        if (["unit_price", "qty_per_year", "probability"].includes(k) && !isFinite(val)) return
+        setLines((xs) => xs.map((x) => (x.id === l.id ? { ...x, [k]: val } : x)))
+        const { error } = await db.from("revenue_lines").update({ [k]: val, updated_at: new Date().toISOString() }).eq("id", l.id)
+        setMsg(error ? error.message : "Saved.")
+    }
+    const addLine = async (e: React.FormEvent) => {
+        e.preventDefault()
+        const { error } = await db.from("revenue_lines").insert({ ...add, unit_price: Number(add.unit_price) || 0, qty_per_year: Number(add.qty_per_year) || 0, probability: Math.min(1, Math.max(0, Number(add.probability) || 0.5)) })
+        setMsg(error ? error.message : "Line added."); if (!error) { setAdd(null); load() }
+    }
+    const csv = () => {
+        const rows = [["Vertical", "Line item", "Market", "Unit", "Unit price", "Qty / yr", "Probability", "Starts", "Expected next 12 mo", "Basis", "Source"]]
+        lines.forEach((l) => rows.push([vLabel(l.vertical), l.line_item, l.market, l.unit, l.unit_price, l.qty_per_year, l.probability, l.start_month, Math.round(exp12(l)), l.basis || "", l.source_url || ""]))
+        const blob = new Blob([rows.map((r) => r.map((x: any) => `"${String(x ?? "").replace(/"/g, '""')}"`).join(",")).join("\n")], { type: "text/csv" })
+        const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `FELEMAYE_revenue_by_vertical_${today()}.csv`; a.click()
+    }
+    return (
+        <div className="c">
+            <IntelStyle />
+            <div className="r" style={{ justifyContent: "space-between" }}>
+                <div><span className="mono">Revenue forecast by vertical · next 12 months</span><div style={{ font: "400 30px/1.1 'Cormorant Garamond',Georgia,serif", marginTop: 6 }}>{$0(grand)}{target ? <small style={{ fontSize: 14, marginLeft: 10, opacity: 0.75 }}>vs {$0(target)} target ({pctOS(grand / target)})</small> : null}</div></div>
+                <span className="r" style={{ gap: 6 }}><button className="b g" onClick={csv}>Export CSV</button><button className="b g" onClick={() => setAdd({ vertical: "VG", line_item: "", market: "LA", unit: "project", unit_price: "", qty_per_year: "", probability: 0.5, start_month: today().slice(0, 8) + "01", basis: "" })}>+ Line</button></span>
+            </div>
+            <GateD err={err}>
+                <div className="fy-stack" role="img" aria-label="Expected revenue per month, stacked by vertical">
+                    {target ? <div className="os-line" style={{ position: "absolute", left: 0, right: 0, borderTop: "1px dashed var(--accent)", bottom: `${(Number(target) / 12 / max) * 150}px` }}><em style={{ position: "absolute", right: 0, top: 3, font: "9px ui-monospace,Menlo,monospace", fontStyle: "normal", color: "var(--accent)", background: "var(--paper)", padding: "0 4px" }}>target {$0(Number(target) / 12)}/mo</em></div> : null}
+                    {months.map((m, i) => (
+                        <div key={m.key} title={`${m.label}: ` + byV.filter((v) => v.m[i] > 0).map((v) => `${v.c} ${$0(v.m[i])}`).join(" · ")}>
+                            {byV.map((v) => v.m[i] > 0 ? <span key={v.c} style={{ display: "block", height: `${(v.m[i] / max) * 150}px`, background: vColor(v.c) }} /> : null)}
+                            <i>{m.label}</i>
+                        </div>
+                    ))}
+                </div>
+                <div className="fy-legend">{byV.filter((v) => v.total > 0).map((v) => <span key={v.c}><b style={{ background: vColor(v.c) }} />{vLabel(v.c)} {$0(v.total)}</span>)}</div>
+                {add && (
+                    <form onSubmit={addLine} className="r" style={{ marginTop: 12, borderTop: ".5px solid var(--ink)", paddingTop: 10 }}>
+                        <select value={add.vertical} onChange={(e) => setAdd({ ...add, vertical: e.target.value })}>{VERTICALS.map(([c, l]) => <option key={c} value={c}>{l}</option>)}</select>
+                        <input required placeholder="Line item" value={add.line_item} onChange={(e) => setAdd({ ...add, line_item: e.target.value })} style={{ flex: "2 1 220px" }} />
+                        <select value={add.market} onChange={(e) => setAdd({ ...add, market: e.target.value })}><option>LA</option><option>NY</option></select>
+                        <input placeholder="Unit (project, hour…)" value={add.unit} onChange={(e) => setAdd({ ...add, unit: e.target.value })} style={{ width: 120 }} />
+                        <input inputMode="decimal" placeholder="Unit price $" value={add.unit_price} onChange={(e) => setAdd({ ...add, unit_price: e.target.value })} style={{ width: 110 }} />
+                        <input inputMode="decimal" placeholder="Qty / year" value={add.qty_per_year} onChange={(e) => setAdd({ ...add, qty_per_year: e.target.value })} style={{ width: 100 }} />
+                        <input inputMode="decimal" placeholder="Prob 0–1" value={add.probability} onChange={(e) => setAdd({ ...add, probability: e.target.value })} style={{ width: 80 }} />
+                        <input type="date" value={add.start_month} onChange={(e) => setAdd({ ...add, start_month: e.target.value })} />
+                        <input placeholder="Basis (where the number comes from)" value={add.basis} onChange={(e) => setAdd({ ...add, basis: e.target.value })} style={{ flex: "2 1 220px" }} />
+                        <button className="b">Add</button><button type="button" className="b g" onClick={() => setAdd(null)}>Cancel</button>
+                    </form>
+                )}
+                <div className="tw" style={{ marginTop: 12 }}>
+                    <table className="fy-num">
+                        <thead><tr><th>Line item</th><th>Unit price</th><th>Qty / yr</th><th>Prob.</th><th>Starts</th><th className="os-num">Next 12 mo</th></tr></thead>
+                        <tbody>
+                            {byV.map((v) => (
+                                <React.Fragment key={v.c}>
+                                    <tr className="vh" onClick={() => setOpen({ ...open, [v.c]: !open[v.c] })} style={{ cursor: "pointer" }}>
+                                        <td colSpan={4}><b style={{ display: "inline-block", width: 10, height: 10, background: vColor(v.c), marginRight: 8 }} />{open[v.c] ? "▾" : "▸"} {vLabel(v.c)} <span className="mono" style={{ marginLeft: 8 }}>{v.ls.length} line{v.ls.length === 1 ? "" : "s"}{collectedBy[v.c] ? ` · collected ${year}: ${$0(collectedBy[v.c])}` : ""}</span></td>
+                                        <td /><td className="n">{$0(v.total)}</td>
+                                    </tr>
+                                    {open[v.c] && v.c === "SD" && <tr><td colSpan={5} style={{ opacity: 0.85 }}>Known pipeline (deals board: won + weighted)<div className="mono">invoiced to date {$0(invoicedSD)}</div></td><td className="n">{$0(pipe.reduce((a, b) => a + b, 0))}</td></tr>}
+                                    {open[v.c] && v.ls.map((l) => (
+                                        <tr key={l.id} style={{ opacity: l.active ? 1 : 0.5 }}>
+                                            <td style={{ maxWidth: 360 }}>{l.line_item} <span className="mono">· {l.market} · per {l.unit}</span>{l.basis && <div style={{ fontSize: 12, opacity: 0.75, marginTop: 3 }}>{l.basis}{l.source_url && <> · <a href={l.source_url} target="_blank" rel="noopener">source ↗</a></>}</div>}<label className="mono" style={{ display: "block", marginTop: 4 }}><input type="checkbox" checked={!!l.active} onChange={(e) => save(l, "active", e.target.checked)} style={{ width: "auto" }} /> include</label></td>
+                                            <td className="n"><input inputMode="decimal" defaultValue={l.unit_price} onBlur={(e) => save(l, "unit_price", e.target.value)} aria-label="Unit price" /></td>
+                                            <td className="n"><input inputMode="decimal" defaultValue={l.qty_per_year} onBlur={(e) => save(l, "qty_per_year", e.target.value)} aria-label="Quantity per year" /></td>
+                                            <td className="n"><input inputMode="decimal" defaultValue={l.probability} onBlur={(e) => save(l, "probability", e.target.value)} aria-label="Probability" style={{ width: 56 }} /></td>
+                                            <td className="n"><input type="month" defaultValue={String(l.start_month).slice(0, 7)} onBlur={(e) => e.target.value && save(l, "start_month", e.target.value + "-01")} aria-label="Start month" style={{ width: 130, textAlign: "left" }} /></td>
+                                            <td className="n">{$0(exp12(l))}</td>
+                                        </tr>
+                                    ))}
+                                </React.Fragment>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+                <p className="mono" style={{ marginTop: 8 }}>Expected = unit price × quantity per year × probability, spread evenly from the start month. Market lines cite their source; "studio estimate" lines are yours to set.</p>
+                {msg && <p className="mono">{msg}</p>}
+            </GateD>
+        </div>
+    )
+}
+
+/* ───────────── Lead signals (type, sector, fit) ───────────── */
+const FIT_LABEL: Record<string, string> = { lead: "You can lead", partner: "Needs a signer", consult: "Consult role" }
+const SECTOR_LABEL: Record<string, string> = { residential_sf: "Single-family", residential_mf: "Multifamily", commercial: "Commercial", hospitality: "Hospitality", mixed_use: "Mixed use", institutional: "Institutional", other: "Other" }
+const TYPE_LABEL: Record<string, string> = { new_construction: "New build", addition: "Addition", alteration: "Remodel / alteration", adu: "ADU", tenant_improvement: "Tenant improvement", fence_wall: "Walls / fences", pool_spa: "Pool / spa", rebuild: "Fire rebuild", entitlement: "Planning application", demolition: "Demolition", repair: "Repair" }
+function LeadsPanel({ db, onChange }: any) {
+    const [leads, setLeads] = React.useState<any[]>([])
+    const [runs, setRuns] = React.useState<any[]>([])
+    const [fit, setFit] = React.useState("")
+    const [sector, setSector] = React.useState("")
+    const [ptype, setPtype] = React.useState("")
+    const [src, setSrc] = React.useState("")
+    const [days, setDays] = React.useState(7)
+    const [busy, setBusy] = React.useState(false)
+    const [msg, setMsg] = React.useState("")
+    const [n, setN] = React.useState(25)
+    const load = React.useCallback(async () => {
+        const [l, r] = await Promise.all([
+            db.from("lead_signals").select("*").in("status", ["new", "reviewing", "pursue"]).order("filed_on", { ascending: false, nullsFirst: false }).order("score", { ascending: false }).limit(400),
+            db.from("lead_scout_runs").select("*").order("ran_at", { ascending: false }).limit(3),
+        ])
+        setLeads(l.data || []); setRuns(r.data || [])
+    }, [db])
+    React.useEffect(() => { load() }, [load])
+    const run = async () => {
+        setBusy(true); setMsg(`Searching the last ${days} days of permit filings…`)
+        const { data, error } = await db.functions.invoke("lead-scout", { body: { days, markets: ["LA", "NY"], trigger: "manual" } })
+        setBusy(false)
+        if (error || data?.error) {
+            const m = String(data?.error || error?.message || "")
+            return setMsg(/Failed to send|404|not found/i.test(m) ? "The lead-scout function isn't deployed yet — see the setup note (Supabase › Edge Functions › deploy lead-scout, JWT check off)." : m)
+        }
+        setMsg(`${data.saved} new · LA County ${data.COUNTY?.kept ?? 0} of ${data.COUNTY?.fetched ?? 0} filings kept · City of LA ${data.LA?.kept ?? 0} of ${data.LA?.fetched ?? 0} · NYC ${data.NY?.kept ?? 0} of ${data.NY?.fetched ?? 0}${(data.errors || []).length ? " · " + data.errors.join("; ") : ""}`)
+        load()
+    }
+    const leadTo = async (l: any, status: string) => {
+        await db.from("lead_signals").update({ status }).eq("id", l.id)
+        if (status === "pursue") await db.from("pipeline_deals").insert({ name: `${l.address || "Lead"} · ${TYPE_LABEL[l.project_type] || l.work_type || l.permit_type || ""}`.slice(0, 120), market: l.market, project_type: ["commercial", "hospitality", "retail"].includes(l.sector) ? l.sector : l.sector === "residential_mf" || l.sector === "residential_sf" ? "residential" : "other", source: "lead_signal:" + l.source, stage: "lead", lead_signal_id: l.id, notes: [l.description, l.fit_why].filter(Boolean).join("\n\n"), next_step: "Research & first outreach", next_step_on: today() })
+        load(); onChange?.()
+    }
+    const srcOf = (l: any) => (l.source === "epicla" ? "county" : l.source === "ladbs_permits" ? "city" : "nyc")
+    const shown = leads.filter((l) => (!fit || l.fit === fit) && (!sector || l.sector === sector) && (!ptype || l.project_type === ptype) && (!src || srcOf(l) === src))
+    const count = (k: string, v: string) => leads.filter((l) => l[k] === v).length
+    const chips = (val: string, set: (v: string) => void, opts: [string, string][], k?: string) => (
+        <div className="fy-chips">{[["", "All"], ...opts].map(([v, l]) => <button key={v || "all"} aria-pressed={val === v} onClick={() => set(v)}>{l}{k && v ? ` · ${count(k, v)}` : ""}</button>)}</div>
+    )
+    const last = runs[0]
+    return (
+        <div className="c">
+            <IntelStyle />
+            <div className="r" style={{ justifyContent: "space-between" }}>
+                <div><span className="mono">Lead signals · public permit filings</span><div style={{ fontSize: 13, opacity: 0.8, marginTop: 4 }}>LA County unincorporated (EPIC-LA) · City of LA (LADBS) · New York City (DOB NOW). Runs by itself Saturday 7 AM and Sunday 6 PM, so Monday starts with a fresh list.</div></div>
+                <span className="r" style={{ gap: 6 }}>
+                    <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="How far back">{[3, 7, 14, 30].map((d) => <option key={d} value={d}>last {d} days</option>)}</select>
+                    <button className="b" disabled={busy} onClick={run}>{busy ? "Running…" : "Run now"}</button>
+                </span>
+            </div>
+            {last && <p className="mono" style={{ marginTop: 6 }}>Last run {new Date(last.ran_at).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" })} · {last.trigger} · {last.result?.saved ?? 0} new</p>}
+            {msg && <div className="os-warn">{msg}</div>}
+            {chips(fit, setFit, [["lead", "You can lead"], ["partner", "Needs a signer"], ["consult", "Consult role"]], "fit")}
+            {chips(sector, setSector, [["residential_sf", "Single-family"], ["residential_mf", "Multifamily"], ["commercial", "Commercial"], ["hospitality", "Hospitality"], ["mixed_use", "Mixed use"], ["institutional", "Institutional"]], "sector")}
+            {chips(ptype, setPtype, [["fence_wall", "Walls / fences"], ["addition", "Addition"], ["adu", "ADU"], ["alteration", "Remodel"], ["rebuild", "Fire rebuild"], ["tenant_improvement", "TI"], ["new_construction", "New build"], ["entitlement", "Planning app"]], "project_type")}
+            {chips(src, setSrc, [["county", "LA County"], ["city", "City of LA"], ["nyc", "NYC"]])}
+            <p className="mono">{shown.length} of {leads.length} open signals</p>
+            {shown.slice(0, n).map((l) => (
+                <div key={l.id} className="fy-lead">
+                    {l.fit && <span className={"fy-fit " + l.fit}>{FIT_LABEL[l.fit] || l.fit}</span>}
+                    {l.sector && <span className="os-pill">{SECTOR_LABEL[l.sector] || l.sector}</span>}
+                    {l.project_type && <span className="os-pill">{TYPE_LABEL[l.project_type] || l.project_type}</span>}
+                    <span className="os-pill">{l.jurisdiction || l.market}</span><span className="os-pill">score {l.score ?? "–"}</span>
+                    <div style={{ marginTop: 4 }}><b>{l.address}</b>{l.neighborhood ? ` · ${l.neighborhood}` : ""}</div>
+                    <div style={{ opacity: 0.8 }}>{[l.permit_type, l.work_type].filter(Boolean).join(" · ")}{l.valuation ? ` · ${$0(l.valuation)}` : ""}{l.filed_on ? ` · filed ${l.filed_on}` : ""}</div>
+                    {l.description && <div style={{ opacity: 0.75, fontSize: 13 }}>{String(l.description).slice(0, 260)}</div>}
+                    {l.fit_why && <div style={{ fontSize: 13, marginTop: 3 }}><b>What you can do:</b> {l.fit_why}</div>}
+                    {l.score_why && <div className="mono">{l.score_why}</div>}
+                    <div className="r" style={{ marginTop: 6 }}><button className="b" onClick={() => leadTo(l, "pursue")}>Pursue → pipeline</button><button className="b g" onClick={() => leadTo(l, "dismissed")}>Dismiss</button>{l.url && <a className="mono" href={l.url} target="_blank" rel="noopener">record ↗</a>}</div>
+                </div>
+            ))}
+            {shown.length > n && <button className="b g" style={{ marginTop: 10 }} onClick={() => setN(n + 25)}>Show 25 more</button>}
+            {!leads.length && <p style={{ fontSize: 14, opacity: 0.8 }}>No open signals yet. Press Run now, or wait for the weekend run.</p>}
+        </div>
+    )
+}
+
+/* ───────────── Trade bot: answers library + prefill-on-PC queue ───────────── */
+function TradeAnswers({ db }: any) {
+    const [ans, setAns] = React.useState<any[]>([])
+    const [missing, setMissing] = React.useState<any[]>([])
+    const [err, setErr] = React.useState<any>(null)
+    const [msg, setMsg] = React.useState("")
+    const load = React.useCallback(async () => {
+        const [a, m] = await Promise.all([db.from("trade_form_answers").select("*").order("sensitive").order("label"), db.from("v_trade_missing_fields").select("*")])
+        if (a.error) return setErr(a.error)
+        setAns(a.data || []); setMissing(m.data || [])
+    }, [db])
+    React.useEffect(() => { load() }, [load])
+    const save = async (r: any, v: string) => { const { error } = await db.from("trade_form_answers").update({ answer: v || null, updated_at: new Date().toISOString() }).eq("field_key", r.field_key); setMsg(error ? error.message : `Saved “${r.label}”.`) }
+    const addField = async (label: string) => {
+        const key = label.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 40)
+        if (!key) return
+        const { error } = await db.from("trade_form_answers").insert({ field_key: key, label, match_terms: [label.toLowerCase()] })
+        setMsg(error ? error.message : `Added “${label}” — type the answer below.`); load()
+    }
+    return (
+        <GateD err={err}>
+            <div className="c" style={{ marginTop: 10 }}>
+                <div className="mono">Answer once — the bot reuses these on every form</div>
+                {missing.length > 0 && (
+                    <div style={{ marginTop: 8, fontSize: 14 }}>
+                        <b>What the bot couldn't fill:</b>{" "}
+                        {missing.map((m: any) => <span key={m.field} className="os-pill" title={(m.vendor_names || []).join(", ")}>{m.field} · {m.vendors}</span>)}
+                        <div className="r" style={{ marginTop: 6 }}><AddLine placeholder="Add a field the forms keep asking for (e.g. Showroom preference)" onAdd={addField} /></div>
+                    </div>
+                )}
+                <div className="tw" style={{ marginTop: 8 }}>
+                    <table><thead><tr><th>Field</th><th>Your answer</th></tr></thead>
+                        <tbody>{ans.map((r) => (
+                            <tr key={r.field_key}>
+                                <td>{r.label}<div className="mono">{(r.match_terms || []).slice(0, 4).join(" · ")}</div></td>
+                                <td>{r.sensitive ? <span style={{ fontSize: 13, opacity: 0.85 }}>Kept on your PC only — <code>credentials/trade_profile.json</code> → <code>{r.field_key}</code></span> : <input defaultValue={r.answer || ""} onBlur={(e) => e.target.value !== (r.answer || "") && save(r, e.target.value)} style={{ width: "100%" }} aria-label={r.label} />}</td>
+                            </tr>))}</tbody></table>
+                </div>
+                <p className="mono" style={{ marginTop: 6 }}>EIN, seller's permit, resale certificate, phone and street address never leave the PC. The bot reads them from the local credentials file.</p>
+                {msg && <p className="mono">{msg}</p>}
+            </div>
+        </GateD>
+    )
+}
+function useAssistJobs(db: any, dep: any) {
+    const [jobs, setJobs] = React.useState<Record<string, any>>({})
+    React.useEffect(() => {
+        let stop = false
+        const tick = async () => {
+            const { data } = await db.from("trade_jobs").select("id,trade_account_id,kind,status,result,requested_at").in("kind", ["assist", "submit"]).order("requested_at", { ascending: false }).limit(500)
+            if (stop) return
+            const m: Record<string, any> = {}; (data || []).forEach((j: any) => { if (j.trade_account_id && !m[j.trade_account_id]) m[j.trade_account_id] = j }); setJobs(m)
+        }
+        tick(); const iv = setInterval(tick, 20000); return () => { stop = true; clearInterval(iv) }
+    }, [db, dep])
+    return jobs
+}
+const JOB_LABEL: Record<string, string> = { queued: "waiting for the PC", claimed: "opening on the PC", running: "open on the PC — review and submit", needs_review: "prefilled — mark Pending once you submit", done: "prefilled", failed: "failed — retry", cancelled: "cancelled" }
+
+/* ───────────── Zoning: numbers, scenarios, evidence, updates, Revit export ───────────── */
+const STATUS_TXT: Record<string, string> = { confirmed: "confirmed", conflict: "in conflict", to_verify: "to verify" }
+const VERDICT_TXT: Record<string, string> = { works: "works", conditional: "conditional", does_not_work: "does not work" }
+function ZoningNumbers({ A }: any) {
+    const N = A.numbers || [], S = A.scenarios || [], E = A.evidence || []
+    if (!N.length && !S.length && !E.length) return null
+    return (
+        <div style={{ marginTop: 14 }}>
+            <IntelStyle />
+            {N.length > 0 && <div className="c tw" style={{ margin: "0 0 12px" }}>
+                <div className="mono">Numbers · what is permissible</div>
+                <table className="fy-num" style={{ marginTop: 8 }}>
+                    <thead><tr><th>Item</th><th>Unit</th><th>Code</th><th>Planner</th><th>Governing</th><th>Option A</th><th>Option B</th><th>Status</th></tr></thead>
+                    <tbody>{N.map((r: any, i: number) => <tr key={i}><td><b>{r.item}</b><div style={{ fontSize: 11.5, opacity: 0.7 }}>{r.basis}</div></td><td>{r.unit}</td><td>{r.code}</td><td>{r.planner}</td><td><b>{r.governing}</b></td><td>{r.option_a}</td><td>{r.option_b}</td><td><span className={"fy-status " + r.status}>{STATUS_TXT[r.status] || r.status}</span></td></tr>)}</tbody>
+                </table>
+            </div>}
+            {S.length > 0 && <div className="c tw" style={{ margin: "0 0 12px" }}>
+                <div className="mono">Scenarios · what can work and what cannot</div>
+                <table className="fy-num" style={{ marginTop: 8 }}>
+                    <thead><tr><th></th><th>Scenario</th><th className="os-num">Solid (in)</th><th className="os-num">Total (ft)</th><th className="os-num">Open %</th><th>Roof</th><th>Path</th><th>Weeks</th><th>Verdict</th></tr></thead>
+                    <tbody>{S.map((s: any) => <tr key={s.id}><td className="mono">{s.id}</td><td><b>{s.name}</b><div style={{ fontSize: 12.5, opacity: 0.8, marginTop: 2 }}>{s.what}</div><div style={{ fontSize: 12, marginTop: 3 }}>{s.why}</div></td><td className="n">{s.solid_in ?? "—"}</td><td className="n">{s.total_ft ?? "—"}</td><td className="n">{s.open_pct ?? "—"}</td><td>{s.roof}</td><td style={{ fontSize: 12.5 }}>{s.path}<div style={{ opacity: 0.7 }}>{s.approvals}</div></td><td>{s.weeks}</td><td><span className={"fy-verdict " + s.verdict}>{VERDICT_TXT[s.verdict] || s.verdict}</span></td></tr>)}</tbody>
+                </table>
+            </div>}
+            {E.length > 0 && <div className="c" style={{ margin: "0 0 12px" }}>
+                <div className="mono">Evidence log · how the analysis got here</div>
+                {E.map((e: any, i: number) => <div key={i} style={{ padding: "8px 0", borderTop: i ? ".5px solid color-mix(in srgb,var(--ink) 15%,transparent)" : "none", fontSize: 14, lineHeight: 1.55 }}><span className="mono">{e.date}</span> <b>{e.source}</b><div>{e.said}</div>{e.effect && <div style={{ opacity: 0.8 }}>→ {e.effect}</div>}</div>)}
+            </div>}
+            {(A.change_log || []).length > 0 && <p className="mono">{A.change_log.join(" · ")}</p>}
+        </div>
+    )
+}
+// stable GUIDs so re-exporting doesn't create duplicate shared parameters in Revit
+function guidFrom(s: string) {
+    const h = (seed: number) => { let x = seed >>> 0; for (let i = 0; i < s.length; i++) { x ^= s.charCodeAt(i); x = Math.imul(x, 16777619) >>> 0 } return x.toString(16).padStart(8, "0") }
+    const a = h(2166136261), b = h(0x9e3779b9), c = h(0x85ebca6b), d = h(0xc2b2ae35)
+    return `${a}-${b.slice(0, 4)}-4${b.slice(5, 8)}-a${c.slice(1, 4)}-${c.slice(4, 8)}${d}`
+}
+function download(name: string, text: string, type = "text/plain") { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([text], { type })); a.download = name; a.click() }
+function revitExports(project: any, a: any) {
+    const A = a.analysis || {}
+    const slug = String(project?.title || "project").replace(/[^A-Za-z0-9]+/g, "_")
+    const q = (x: any) => `"${String(x ?? "").replace(/"/g, '""')}"`
+    const T: Record<string, string> = { Text: "TEXT", Length: "LENGTH", Area: "AREA", Number: "NUMBER" }
+    const params = (A.revit || []) as any[]
+    return {
+        numbers: () => download(`${slug}_zoning_numbers.csv`, [["Item", "Unit", "Code", "Planner", "Governing", "Option A", "Option B", "Basis", "Status"], ...(A.numbers || []).map((r: any) => [r.item, r.unit, r.code, r.planner, r.governing, r.option_a, r.option_b, r.basis, r.status])].map((r) => r.map(q).join(",")).join("\n"), "text/csv"),
+        scenarios: () => download(`${slug}_zoning_scenarios.csv`, [["ID", "Scenario", "What", "Solid in", "Total ft", "Open %", "Roof", "Path", "Approvals", "Weeks", "Verdict", "Why"], ...(A.scenarios || []).map((s: any) => [s.id, s.name, s.what, s.solid_in, s.total_ft, s.open_pct, s.roof, s.path, s.approvals, s.weeks, s.verdict, s.why])].map((r) => r.map(q).join(",")).join("\n"), "text/csv"),
+        shared: () => download(`FELEMAYE_Zoning_SharedParameters.txt`, ["# This is a Revit shared parameter file.", "# Do not edit manually.", "*META\tVERSION\tMINVERSION", "META\t2\t1", "*GROUP\tID\tNAME", "GROUP\t1\tFELEMAYE Zoning", "*PARAM\tGUID\tNAME\tDATATYPE\tDATACATEGORY\tGROUP\tVISIBLE\tDESCRIPTION\tUSERMODIFIABLE\tHIDEWHENNOVALUE",
+            ...params.map((p) => `PARAM\t${guidFrom(p.param)}\t${p.param}\t${T[p.type] || "TEXT"}\t\t1\t1\t${String(p.note || "").replace(/\t/g, " ")}\t1\t0`)].join("\r\n")),
+        values: () => download(`${slug}_zoning_project_information.csv`, [["Parameter", "Type", "Value", "Note"], ...params.map((p) => [p.param, p.type, p.value, p.note || ""])].map((r) => r.map(q).join(",")).join("\n"), "text/csv"),
+    }
+}
+function ZoningUpdate({ db, a, pid, onSaved, setMsg }: any) {
+    const [text, setText] = React.useState("")
+    const [src, setSrc] = React.useState("")
+    const [busy, setBusy] = React.useState("")
+    const [files, setFiles] = React.useState<string[]>([])
+    const addFiles = async (list: FileList | null) => {
+        if (!list) return
+        for (const f of Array.from(list)) { setBusy("Reading " + f.name + "…"); try { const t = await fileText(f); setText((x) => (x ? x + "\n\n" : "") + `──── ${f.name} ────\n` + t.trim()); setFiles((xs) => [...xs, f.name]) } catch (e: any) { setMsg(f.name + ": " + (e?.message || "could not read")) } }
+        setBusy("")
+    }
+    const insertVersion = async (analysis: any, label: string) => {
+        const { id, created_at, updated_at, ...rest } = a
+        const f = analysis.facts || {}
+        const row = { ...rest, analysis, status: "draft", version: Number(a.version || 1) + 1, supersedes: a.id, source_files: [...(a.source_files || []), ...(files.length ? files : [label])], source_note: [a.source_note, text].filter(Boolean).join("\n\n").slice(0, 200000),
+            setback_front_ft: f.setback_front_ft ?? a.setback_front_ft, wall_height_cap_in: f.wall_height_cap_in ?? a.wall_height_cap_in, transparency_pct: f.transparency_pct ?? a.transparency_pct }
+        const { error } = await db.from("project_zoning_audits").insert(row)
+        if (error) return setMsg(/supersedes|version/.test(error.message) ? NEEDS_D : error.message)
+        setText(""); setSrc(""); setFiles([]); setMsg(`Saved v${row.version}. v${a.version || 1} is kept below.`); onSaved?.()
+    }
+    const runAI = async () => {
+        setBusy("Updating the analysis with the new material — 20–60 seconds…")
+        const { data, error } = await db.functions.invoke("zoning-analyze", { body: { mode: "update", project_id: pid, jurisdiction: a.jurisdiction, prior: a.analysis, text: (src ? `Source: ${src}\n` : "") + text, files } })
+        setBusy("")
+        if (error || data?.error) return setMsg((data?.error || error?.message || "Update failed") + " — redeploy zoning-analyze (2026-10-23d), or use “Add to the evidence log only”.")
+        insertVersion(data.analysis, src || "update")
+    }
+    const logOnly = () => {
+        const A = { ...(a.analysis || {}) }
+        A.evidence = [...(A.evidence || []), { date: today(), source: src || "Note", said: text.trim().slice(0, 2000), effect: "Logged — not yet folded into the numbers or scenarios." }]
+        A.change_log = [...(A.change_log || []), `v${Number(a.version || 1) + 1} (${today()}): evidence added — ${src || "note"}.`]
+        insertVersion(A, src || "note")
+    }
+    return (
+        <div className="c" style={{ borderColor: "var(--ochre)", marginTop: 12 }}>
+            <div className="mono">Add new evidence · the analysis updates and keeps this version</div>
+            <div className="r" style={{ marginTop: 8 }}>
+                <input placeholder="Source (e.g. Regional Planning — Daisy, meeting 3)" value={src} onChange={(e) => setSrc(e.target.value)} style={{ flex: "2 1 260px" }} />
+                <label className="b g" style={{ cursor: "pointer" }}>Upload notes<input type="file" multiple hidden accept=".pdf,.docx,.txt,.md,.markdown,.html,.htm" onChange={(e) => { addFiles(e.target.files); e.currentTarget.value = "" }} /></label>
+            </div>
+            <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="What was said or found. e.g. 'Daisy: the section team says photos of nearby homes with hedges used as walls, plus our shallow rear yard, support a Yard Modification in the front yard — public hearing.'" style={{ width: "100%", marginTop: 8, fontSize: 15 }} />
+            <div className="r" style={{ marginTop: 8 }}>
+                <button className="b" disabled={!!busy || text.trim().length < 20} onClick={runAI}>Update the analysis</button>
+                <button className="b g" disabled={!!busy || text.trim().length < 5} onClick={logOnly}>Add to the evidence log only</button>
+                {busy && <span className="mono">{busy}</span>}
+            </div>
+        </div>
+    )
+}
+
+/* ───────────── Client references: images that render everywhere ───────────── */
+function RefImage({ f, url }: any) {
+    const [bad, setBad] = React.useState(false)
+    const name = String(f.name || "").replace(/^Reference · /, "")
+    const href = url || String(f.path).replace(/^ext:/, "")
+    return (
+        <a href={href} target="_blank" rel="noopener" title={name}>
+            {url && !bad ? <><img src={url} alt={name} loading="lazy" onError={() => setBad(true)} /><span>{name}</span></> : <div className="tile">{name} ↗<br /><small style={{ opacity: 0.6 }}>{f.drive_id ? "Drive — picture appears after the next Drive sync" : ""}</small></div>}
+        </a>
     )
 }

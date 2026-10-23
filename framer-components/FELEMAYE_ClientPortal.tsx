@@ -2288,8 +2288,11 @@ function NotificationBell({ db, project, go }: any) {
         const base = (project?.title || "Your suite") + " · FELEMAYE"
         try { document.title = total ? `(${total}) ${base}` : base } catch {}
     }, [total, project?.title])
+    const [pos, setPos] = React.useState<any>(null)
     const toggle = () => {
         const n = !open; setOpen(n)
+        // on phones the button sits in a narrow column, so the panel is pinned to the screen edges instead
+        try { const r = ref.current?.getBoundingClientRect(); setPos(r && window.innerWidth < 720 ? { position: "fixed", left: 12, right: 12, width: "auto", top: Math.round(r.bottom + 8), maxHeight: Math.max(220, window.innerHeight - r.bottom - 24), zIndex: 60 } : null) } catch { setPos(null) }
         if (n && unread) db.rpc("mark_notifications_read", { p_project: project.id }).then(() => setTimeout(load, 4000), () => {})
     }
     const ago = (t: string) => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : fmtD(new Date(t)) }
@@ -2301,7 +2304,7 @@ function NotificationBell({ db, project, go }: any) {
                 Updates{total > 0 && <b>{total}</b>}
             </button>
             {open && (
-                <div className="ntf" role="dialog" aria-label="Notifications">
+                <div className="ntf" role="dialog" aria-label="Notifications" style={pos || undefined}>
                     <div className="mono" style={{ padding: "14px 16px" }}>Studio updates{counts.unread_messages ? ` · ${counts.unread_messages} new message${counts.unread_messages > 1 ? "s" : ""}` : ""}</div>
                     {counts.unread_messages > 0 && <button className="it" onClick={() => { setOpen(false); go("messages") }}><span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, background: "var(--accent)" }} /><span style={{ fontSize: 15.5 }}>Open your messages →</span></button>}
                     {rows.map((r) => (

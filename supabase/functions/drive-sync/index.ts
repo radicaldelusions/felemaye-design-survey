@@ -6,6 +6,12 @@
 // Auth: header x-sync-secret = DRIVE_SYNC_SECRET (function secret). Deploy with --no-verify-jwt.
 // Actions (POST JSON): {action:"projects"} · {action:"files", project_id, files:[{id,name,url,mimeType,folder,modified}]}
 //                      {action:"family_pending"} · {action:"family_mark", ids:[...], doc_url}
+// 3. (2026-10-23d) Reference images: {action:"need_thumbs"} lists Drive-linked files without a cached image;
+//    {action:"thumb", id, mime, data_b64} stores a resized copy in Storage (project-files/<project>/studio/previews/<drive id>.jpg — where the portal looks)
+//    so the console and the portal can show it on any device. {action:"thumb", id, mime:"not_image"} marks non-images.
+// 4. (2026-10-23d) Revenue ledger: {action:"ledger", rows:[{ref, date, project, vertical, description, amount, status}]}
+//    upserts invoices from the "FELEMAYE Revenue Ledger" Google Sheet (source "sheet"); a row whose invoice no.
+//    matches an existing invoice updates that invoice instead of adding a second one.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
 const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } })
 
@@ -57,5 +63,60 @@ Deno.serve(async (req) => {
         if (error) return json({ error: error.message }, 500)
         return json({ marked: b.ids.length })
     }
+
+    if (b.action === "need_thumbs") {
+        const { data, error } = await db.from("project_files").select("id,project_id,name,drive_id,category,mime_type")
+            .not("drive_id", "is", null).is("thumb_path", null).or("mime_type.is.null,mime_type.like.image/%").limit(40)
+        if (error) return json({ error: error.message }, 500)
+        return json({ files: (data || []).filter((f: any) => f.mime_type !== "not_image") })
+    }
+
+    if (b.action === "thumb") {
+        if (!b.id) return json({ error: "id required" }, 400)
+        const { data: f } = await db.from("project_files").select("id,project_id,drive_id").eq("id", b.id).maybeSingle()
+        if (!f) return json({ error: "unknown file" }, 404)
+        if (b.mime === "not_image" || !b.data_b64) {
+            await db.from("project_files").update({ mime_type: b.mime || "not_image" }).eq("id", f.id)
+            return json({ ok: true, skipped: true })
+        }
+        const bytes = Uint8Array.from(atob(String(b.data_b64)), (c) => c.charCodeAt(0))
+        if (bytes.length > 8_000_000) return json({ error: "image too large after resize" }, 413)
+        const path = `${f.project_id}/studio/previews/${f.drive_id}.jpg` // same place the portal looks for Drive previews
+        const up = await db.storage.from("project-files").upload(path, bytes, { contentType: "image/jpeg", upsert: true })
+        if (up.error) return json({ error: up.error.message }, 500)
+        await db.from("project_files").update({ thumb_path: path, mime_type: b.mime || "image/jpeg" }).eq("id", f.id)
+        return json({ ok: true, path })
+    }
+
+    if (b.action === "ledger") {
+        if (!Array.isArray(b.rows)) return json({ error: "rows required" }, 400)
+        const { data: projects } = await db.from("projects").select("id,title,slug")
+        const find = (p: string) => {
+            const q = String(p || "").toLowerCase().trim(); if (!q) return null
+            return (projects || []).find((x: any) => [x.title, x.slug].some((v: any) => String(v || "").toLowerCase() === q))
+                || (projects || []).find((x: any) => String(x.title || "").toLowerCase().includes(q) || q.includes(String(x.title || "").toLowerCase()))
+        }
+        let added = 0, updated = 0; const problems: string[] = []
+        for (const r of b.rows) {
+            const amount = Number(String(r.amount ?? "").replace(/[$,\s]/g, ""))
+            if (!r.ref || !amount) { if (r.ref || r.amount) problems.push(`row ${r.ref || "?"}: needs a reference and an amount`); continue }
+            const st = /paid|received|yes|true|✓/i.test(String(r.status)) ? "paid" : /void|cancel/i.test(String(r.status)) ? "void" : "sent"
+            const when = r.date ? new Date(r.date).toISOString() : new Date().toISOString()
+            const p = find(r.project)
+            const { data: byNum } = await db.from("invoices").select("id,source").eq("number", String(r.ref)).maybeSingle()
+            if (byNum) {
+                const { error } = await db.from("invoices").update({ status: st, paid_at: st === "paid" ? when : null, amount_paid: st === "paid" ? amount : null }).eq("id", byNum.id)
+                if (error) problems.push(`${r.ref}: ${error.message}`); else updated++
+                continue
+            }
+            const row = { external_ref: "sheet:" + r.ref, number: String(r.ref), project_id: p?.id || null, description: r.description || null, amount,
+                status: st, issued_at: when, paid_at: st === "paid" ? when : null, vertical: String(r.vertical || "SD").toUpperCase().slice(0, 2), source: "sheet" }
+            const { data: had } = await db.from("invoices").select("id").eq("external_ref", row.external_ref).maybeSingle()
+            const res = had ? await db.from("invoices").update(row).eq("id", had.id) : await db.from("invoices").insert(row)
+            if (res.error) problems.push(`${r.ref}: ${res.error.message}`); else had ? updated++ : added++
+        }
+        return json({ added, updated, problems })
+    }
+
     return json({ error: "unknown action" }, 400)
 })

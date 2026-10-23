@@ -16,7 +16,14 @@
  *        SYNC_SECRET = (same value as DRIVE_SYNC_SECRET)
  *        CLIENT_FOLDER_PATTERN = client|reference|inspiration|upload|from     (optional)
  *      No Supabase keys go in Google.
- *   3. Run setup() once and approve. The first run only records "now" — it doesn't re-import files already in the
+ *   3. (2026-10-23d) Reference images: every run also caches a resized copy of Drive images that are linked in the
+ *      portal (Storage, project-files/<project>/studio/previews/ — the same place the portal already looks), so the console's Client References and the client's phone
+ *      can show the picture itself instead of a link. Uses Drive thumbnails; nothing is shared or moved.
+ *   4. (2026-10-23d) Revenue ledger: rows in the Google Sheet "FELEMAYE Revenue Ledger" (ID in script property
+ *      LEDGER_SHEET_ID) become invoices in the console — tick Paid and it counts on the dashboard. Columns:
+ *      Invoice no. | Date | Project | Vertical | Description | Amount | Status | Synced (filled by the script)
+ *      No bank connection: you type or paste what came in.
+ *   Run setup() once and approve. The first run only records "now" — it doesn't re-import files already in the
  *      portal. Run backfill() once if you want everything currently in those folders imported (duplicates are skipped).
  */
 var PROPS = PropertiesService.getScriptProperties();
@@ -34,7 +41,52 @@ function run() {
   try { syncClientFolders_(new Date(PROPS.getProperty('LAST_SYNC') || started.toISOString())); PROPS.setProperty('LAST_SYNC', started.toISOString()); }
   catch (e) { Logger.log('Folder sync: ' + e); }
   try { syncFamilySurvey_(); } catch (e) { Logger.log('Family survey: ' + e); }
+  try { cacheThumbnails_(); } catch (e) { Logger.log('Thumbnails: ' + e); }
+  try { syncLedger_(); } catch (e) { Logger.log('Ledger: ' + e); }
 }
+
+/** Resized copies of Drive reference images for the portal (Drive sharing unchanged). */
+function cacheThumbnails_() {
+  var files = call_({ action: 'need_thumbs' }).files || [];
+  var token = ScriptApp.getOAuthToken();
+  files.forEach(function (f) {
+    try {
+      var meta = JSON.parse(UrlFetchApp.fetch('https://www.googleapis.com/drive/v3/files/' + f.drive_id + '?fields=mimeType,thumbnailLink&supportsAllDrives=true',
+        { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true }).getContentText() || '{}');
+      if (!meta.mimeType) return; // no access from this account
+      if (meta.mimeType.indexOf('image/') !== 0) { call_({ action: 'thumb', id: f.id, mime: 'not_image' }); return; }
+      if (!meta.thumbnailLink) return; // Drive hasn't made one yet; next run
+      var big = meta.thumbnailLink.replace(/=s\d+$/, '=s1600');
+      var img = UrlFetchApp.fetch(big, { headers: { Authorization: 'Bearer ' + token }, muteHttpExceptions: true });
+      if (img.getResponseCode() !== 200) return;
+      call_({ action: 'thumb', id: f.id, mime: meta.mimeType, data_b64: Utilities.base64Encode(img.getBlob().getBytes()) });
+    } catch (e) { Logger.log('thumb ' + f.name + ': ' + e); }
+  });
+  if (files.length) Logger.log('Thumbnails: ' + files.length + ' checked');
+}
+function cacheThumbnailsNow() { cacheThumbnails_(); }
+
+/** Revenue ledger sheet → invoices. */
+function syncLedger_() {
+  var id = PROPS.getProperty('LEDGER_SHEET_ID'); if (!id) return;
+  var sh = SpreadsheetApp.openById(id).getSheets()[0];
+  var values = sh.getDataRange().getValues(); if (values.length < 2) return;
+  var head = values[0].map(function (h) { return String(h).toLowerCase(); });
+  var col = function (re) { for (var i = 0; i < head.length; i++) if (re.test(head[i])) return i; return -1; };
+  var c = { ref: col(/invoice|ref/), date: col(/date/), project: col(/project|client/), vertical: col(/vertical/), description: col(/desc/), amount: col(/amount/), status: col(/status|paid/), synced: col(/synced/) };
+  var rows = [], idx = [];
+  for (var r = 1; r < values.length; r++) {
+    var v = values[r]; if (!v[c.ref] && !v[c.amount]) continue;
+    rows.push({ ref: String(v[c.ref]), date: v[c.date] ? new Date(v[c.date]).toISOString() : null, project: c.project >= 0 ? v[c.project] : '',
+                vertical: c.vertical >= 0 ? v[c.vertical] : 'SD', description: c.description >= 0 ? v[c.description] : '', amount: v[c.amount], status: c.status >= 0 ? v[c.status] : '' });
+    idx.push(r);
+  }
+  if (!rows.length) return;
+  var res = call_({ action: 'ledger', rows: rows });
+  if (c.synced >= 0) { var stamp = new Date(); idx.forEach(function (r) { sh.getRange(r + 1, c.synced + 1).setValue(stamp); }); }
+  Logger.log('Ledger: +' + res.added + ' new, ' + res.updated + ' updated' + ((res.problems || []).length ? ' · ' + res.problems.join('; ') : ''));
+}
+function syncLedgerNow() { syncLedger_(); }
 
 function call_(payload) {
   var res = UrlFetchApp.fetch(PROPS.getProperty('SYNC_URL'), {
