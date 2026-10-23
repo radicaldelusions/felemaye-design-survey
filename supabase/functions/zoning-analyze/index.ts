@@ -9,6 +9,11 @@
 // Studio only (the caller's JWT must pass is_studio()). Secrets (Supabase › Edge Functions › Secrets):
 //   ANTHROPIC_API_KEY (required) · ANTHROPIC_MODEL (optional, default claude-sonnet-5-5)
 // Deploy with JWT verification ON (the default):  supabase functions deploy zoning-analyze
+//
+// Second mode (2026-10-23): POST { mode: "references", project_id, images: [{name, url}], notes? }
+//   Reads the client's reference images (signed Storage URLs) and returns an internal design read for Schematic
+//   Design: directions, materials with specs, palette, elements, keep-out list, tensions with the zoning limits,
+//   SD moves and questions. Same auth and secrets as the zoning mode.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4"
 
 const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, apikey, content-type, x-client-info", "access-control-allow-methods": "POST, OPTIONS" }
@@ -44,7 +49,9 @@ Deno.serve(async (req) => {
     const key = Deno.env.get("ANTHROPIC_API_KEY")
     if (!key) return json({ error: "ANTHROPIC_API_KEY not set" }, 500)
 
-    const { project_id, jurisdiction = "la_county", text = "", files = [] } = await req.json().catch(() => ({}))
+    const body = await req.json().catch(() => ({}))
+    if (body.mode === "references") return referencesRead(body, key, url)
+    const { project_id, jurisdiction = "la_county", text = "", files = [] } = body
     if (!project_id || String(text).trim().length < 40) return json({ error: "Upload or paste the meeting notes first." }, 400)
 
     const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } })
@@ -90,3 +97,46 @@ ${SHAPE}`
         return json({ error: "Could not read the analysis — try again.", raw: raw.slice(0, 1500) }, 502)
     }
 })
+
+const READ_SHAPE = `{
+ "summary": "4–6 plain sentences: what the images have in common, where they split, how that sits with the existing house",
+ "directions": [{"name": "short name", "what": "materials, forms, planting in one or two sentences", "refs": ["image names"]}],
+ "materials": [{"item": "e.g. Walls and seat backs", "spec": "buildable specification", "why": "which images / what it solves"}],
+ "palette": [{"name": "colour name", "hex": "#RRGGBB"}],
+ "elements": ["design elements to test in SD"],
+ "keep_out": ["things the client signalled against, or that would dilute the scheme"],
+ "tensions": ["conflicts with the zoning limits, the existing house, budget, maintenance"],
+ "sd_moves": ["concrete schematic options to draw"],
+ "questions": ["questions for the client before SD"]
+}`
+
+async function referencesRead(b: any, key: string, url: string) {
+    const imgs = (Array.isArray(b.images) ? b.images : []).filter((i: any) => /^https:\/\//.test(i?.url || "")).slice(0, 20)
+    if (!b.project_id || !imgs.length) return json({ error: "No viewable images. Upload reference images to the portal (Files) — Drive-only links can't be read here." }, 400)
+    const db = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } })
+    const [{ data: project }, { data: audit }] = await Promise.all([
+        db.from("projects").select("title,address").eq("id", b.project_id).maybeSingle(),
+        db.from("project_zoning_audits").select("analysis").eq("project_id", b.project_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ])
+    const limits = audit?.analysis ? JSON.stringify({ non_negotiables: audit.analysis.non_negotiables, facts: audit.analysis.facts }).slice(0, 4000) : "(no zoning analysis saved yet)"
+    const system = `You are a senior residential architect preparing an internal design read before Schematic Design. Look closely at the client's reference images and describe what is actually in them: forms, materials, finishes, planting, colour, light, furniture. Be specific (name materials and finishes a contractor could price). Note when images disagree with each other. Do not flatter, do not use marketing language, avoid lists of three for rhythm's sake, and do not invent things you cannot see. Zoning limits for this site: ${limits}
+Return ONLY one JSON object in this shape:
+${READ_SHAPE}`
+    const content: any[] = [{ type: "text", text: `Project: ${project?.title || ""} — ${project?.address || ""}\nStudio notes: ${b.notes || "(none)"}\nImages follow, each preceded by its file name.` }]
+    for (const i of imgs) { content.push({ type: "text", text: `Image: ${i.name}` }); content.push({ type: "image", source: { type: "url", url: i.url } }) }
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify({ model: Deno.env.get("ANTHROPIC_MODEL") || "claude-sonnet-5-5", max_tokens: 5000, system, messages: [{ role: "user", content }] }),
+    })
+    if (!r.ok) return json({ error: "Analysis service error", detail: (await r.text()).slice(0, 400) }, 502)
+    const out = await r.json()
+    const raw = (out.content || []).map((c: any) => c.text || "").join("")
+    try {
+        const read = JSON.parse(raw.slice(raw.indexOf("{"), raw.lastIndexOf("}") + 1))
+        read.images_seen = imgs.length
+        return json({ read, model: out.model })
+    } catch {
+        return json({ error: "Could not read the result — try again.", raw: raw.slice(0, 1500) }, 502)
+    }
+}

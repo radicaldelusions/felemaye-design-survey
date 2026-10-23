@@ -97,7 +97,23 @@ const FEES = [
     { t: "Milestone 3 · Design Development delivery", amt: 2250, note: "25% · invoiced on DD approval" },
 ]
 
+// Light / dark for the whole suite. Follows the device until the client chooses; the choice stays on that device.
+const ModeCtx = React.createContext<{ mode: "dark" | "light"; toggle: () => void }>({ mode: "dark", toggle: () => {} })
+function ModeToggle({ style }: any) {
+    const { mode, toggle } = React.useContext(ModeCtx)
+    return <button className="btn ghost modebtn" onClick={toggle} style={style} aria-label={mode === "dark" ? "Switch to light mode" : "Switch to dark mode"}>{mode === "dark" ? "Light mode" : "Dark mode"}</button>
+}
+
 export default function ClientPortal(p: Props) {
+    const [mode, setMode] = React.useState<"dark" | "light">(() => {
+        try {
+            const m = localStorage.getItem("fy_pmode")
+            if (m === "dark" || m === "light") return m
+            if (window.matchMedia?.("(prefers-color-scheme: light)").matches) return "light"
+        } catch {}
+        return "dark"
+    })
+    const toggleMode = () => setMode((m) => { const n = m === "dark" ? "light" : "dark"; try { localStorage.setItem("fy_pmode", n) } catch {} ; return n })
     const db = React.useMemo(() => sb(p.supabaseUrl, p.publishableKey), [p.supabaseUrl, p.publishableKey])
     const [phase, setPhase] = React.useState<"boot" | "gate" | "survey" | "dash" | "audit">("boot")
     const [client, setClient] = React.useState<any>(null)
@@ -170,14 +186,18 @@ export default function ClientPortal(p: Props) {
 
     const css = `
     .fyp *{box-sizing:border-box}
-    .fyp{--paper:${p.paper};--ink:${p.ink};--accent:${p.accent};--surface:${p.surface};--line:#222226;--sage:#8A9A86;--ochre:#C88A35;--slate:#5B7083;
-      font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--paper);min-height:100%;width:100%}
-    .fyp .mono{font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.2em;font-size:10px;text-transform:uppercase;opacity:.65}
+    .fyp{--paper:${p.paper};--ink:${p.ink};--accent:${p.accent};--surface:${p.surface};--line:#3A3A40;--sage:#8A9A86;--ochre:#C88A35;--slate:#5B7083;--btn-ink:#0B0B0C;
+      font-family:'Inter',system-ui,sans-serif;color:var(--ink);background:var(--paper);min-height:100%;width:100%;font-size:16px}
+    .fyp.light{--paper:#F4EFE4;--ink:#1F1E1B;--accent:#8A5A1C;--surface:#FBF8F1;--line:rgba(31,30,27,.24);--sage:#4F6A4B;--ochre:#8A5A1C;--slate:#34505F;--btn-ink:#FFFFFF}
+    .fyp.light .card{background:#FBF8F1;-webkit-backdrop-filter:none;backdrop-filter:none;border-color:rgba(31,30,27,.16)}
+    .fyp.light .glass{background:#FBF8F1}
+    .fyp .modebtn{padding:12px 16px}
+    .fyp .mono{font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.14em;font-size:11.5px;line-height:1.5;text-transform:uppercase;opacity:.8}
     .fyp h1,.fyp h2,.fyp h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;margin:0;letter-spacing:.01em}
     .fyp button{font:inherit;cursor:pointer}
     .fyp .wrap{max-width:1280px;margin:0 auto;padding:clamp(20px,5vw,72px)}
     .fyp .card{background:color-mix(in srgb,var(--surface) 60%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid color-mix(in srgb,var(--ink) 9%,transparent);padding:clamp(18px,3vw,32px);min-width:0}
-    .fyp .btn{background:var(--accent);color:#0B0B0C;border:0;padding:14px 22px;letter-spacing:.18em;font-size:11px;text-transform:uppercase}
+    .fyp .btn{background:var(--accent);color:var(--btn-ink);border:0;padding:14px 22px;letter-spacing:.14em;font-size:12px;text-transform:uppercase}
     .fyp .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}.fyp .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
     .fyp .btn:disabled{opacity:.4;cursor:default}
     .fyp input,.fyp textarea{width:100%;background:transparent;border:0;border-bottom:1px solid var(--line);padding:12px 2px;font:inherit;color:inherit;outline:none;font-size:16px}
@@ -189,21 +209,22 @@ export default function ClientPortal(p: Props) {
     .fyp .navgrid{display:grid;gap:1px;background:color-mix(in srgb,var(--ink) 22%,transparent);border:1px solid color-mix(in srgb,var(--ink) 22%,transparent);margin:0 0 28px}
     .fyp .navgrid .row2{display:grid;grid-template-columns:minmax(0,1fr);gap:1px}
     .fyp .navgrid .row5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px}.fyp .navgrid .row5>.nv:last-child:nth-child(5n+1){grid-column:1/-1}
-    .fyp .nv{background:var(--paper);color:var(--ink);border:0;border-radius:0;min-height:52px;padding:10px 8px;font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1.35}
+    .fyp .nv{background:var(--paper);color:var(--ink);border:0;border-radius:0;min-height:52px;padding:10px 8px;font:500 12px ui-monospace,Menlo,monospace;letter-spacing:.14em;text-transform:uppercase;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1.35}
     .fyp .nv:hover{background:color-mix(in srgb,var(--accent) 14%,var(--paper))}
     .fyp .nv[aria-selected=true],.fyp .nv[aria-current=page]{background:var(--accent);color:var(--paper)}
     .fyp .nv:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
     .fyp .actrow{display:grid;grid-template-columns:136px 64px minmax(0,1fr);column-gap:16px;padding:10px 0;border-top:1px solid var(--line);font-size:13px;align-items:baseline}
     .fyp .actrow .ts{white-space:nowrap;font:11px ui-monospace,Menlo,monospace;letter-spacing:.04em;opacity:.6;font-variant-numeric:tabular-nums}
-    .fyp .actrow .sd{font:600 9px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase}
+    .fyp .actrow .sd{font:600 10.5px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase}
     .fyp .actrow .sd[data-s=studio]{color:var(--accent)}.fyp .actrow .sd[data-s=client]{color:var(--sage)}.fyp .actrow .sd[data-s=system]{opacity:.5}
     .fyp .actrow .tx{min-width:0;overflow-wrap:anywhere}
-    .fyp .actf{display:inline-flex;gap:0;border:1px solid var(--line)}.fyp .actf button{all:unset;cursor:pointer;padding:6px 10px;font:500 9px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase}
+    .fyp .actf{display:inline-flex;gap:0;border:1px solid var(--line)}.fyp .actf button{all:unset;cursor:pointer;padding:6px 10px;font:500 10.5px ui-monospace,Menlo,monospace;letter-spacing:.16em;text-transform:uppercase}
     .fyp .actf button[aria-pressed=true]{background:var(--accent);color:var(--paper)}.fyp .actf button:focus-visible{outline:2px solid var(--accent)}
-    .fyp .phbar{flex:1;height:6px;background:#222226;position:relative;overflow:hidden}.fyp .phbar i{position:absolute;inset:0 auto 0 0;transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
+    .fyp .phbar{flex:1;height:6px;background:var(--line);position:relative;overflow:hidden}.fyp .phbar i{position:absolute;inset:0 auto 0 0;transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
     .fyp .g2{grid-template-columns:1.4fr 1fr}
-    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow{grid-template-columns:92px minmax(0,1fr)}.fyp .actrow .sd{grid-column:2}.fyp .actrow .tx{grid-column:2}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .navgrid .row5>.nv:last-child:nth-child(5n+1){grid-column:auto}.fyp .navgrid .row5>.nv:last-child:nth-child(odd){grid-column:1/-1}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
+    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow{grid-template-columns:auto minmax(0,1fr);row-gap:4px}.fyp .actrow .ts{grid-column:1}.fyp .actrow .sd{grid-column:2;text-align:right}.fyp .actrow .tx{grid-column:1/-1}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .navgrid .row5>.nv:last-child:nth-child(5n+1){grid-column:auto}.fyp .navgrid .row5>.nv:last-child:nth-child(odd){grid-column:1/-1}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
     .fyp img,.fyp iframe{max-width:100%}
+    .fyp a{color:var(--accent)}.fyp a.btn{color:var(--btn-ink)}.fyp a.btn.ghost{color:var(--ink)}
     .fyp .tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;width:100%;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
     .fyp .tabs::-webkit-scrollbar{display:none}
     .fyp .tabs .btn{white-space:nowrap;padding:10px 14px;flex:1 1 auto;text-align:center}.fyp .wrap{width:100%}
@@ -228,19 +249,22 @@ export default function ClientPortal(p: Props) {
       .fyp .mono{letter-spacing:.14em}
     }
     .fyp .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
-    .fyp .pill{border:1px solid var(--line);padding:3px 10px;font-size:10px;letter-spacing:.16em;text-transform:uppercase}
+    .fyp .pill{border:1px solid var(--line);padding:3px 10px;font-size:11px;letter-spacing:.12em;text-transform:uppercase}
     .fyp .glass{backdrop-filter:blur(18px) saturate(1.2);background:color-mix(in srgb,var(--surface) 72%,transparent);border:1px solid var(--line)}
     `
     return (
-        <div className="fyp" style={p.style}>
+        <ModeCtx.Provider value={{ mode, toggle: toggleMode }}>
+        <div className={"fyp" + (mode === "light" ? " light" : "")} style={p.style}>
             <style>{css}</style>
-            {preview && <div className="mono" style={{ background: "var(--accent)", color: "#0B0B0C", padding: "10px 20px", opacity: 1, position: "sticky", top: 0, zIndex: 5 }}>Studio audit · {project?.title || "client"} · survey skipped{fromAudit && <a style={{ marginLeft: 16, textDecoration: "underline", cursor: "pointer", color: "inherit" }} onClick={() => setPhase("audit")}>Back to audit list</a>}</div>}
+            {preview && <div className="mono" style={{ background: "var(--accent)", color: "var(--btn-ink)", padding: "10px 20px", opacity: 1, position: "sticky", top: 0, zIndex: 5 }}>Studio audit · {project?.title || "client"} · survey skipped{fromAudit && <a style={{ marginLeft: 16, textDecoration: "underline", cursor: "pointer", color: "inherit" }} onClick={() => setPhase("audit")}>Back to audit list</a>}</div>}
             {phase === "boot" && <div className="wrap mono">Opening the studio…</div>}
             {phase === "gate" && <Gateway p={p} db={db} onEntered={load} loadErr={loadErr} />}
             {phase === "survey" && <Survey p={p} client={client} project={project} onDone={load} db={db} preview={preview} />}
             {phase === "audit" && <AuditList db={db} onOpen={(pr: any, cl: any, st: any) => { setFromAudit(true); setPreview(true); setClient(cl); setProject(pr); setPhase(st) }} />}
             {phase === "dash" && <Dashboard p={p} client={client} project={project} db={db} />}
+            {phase !== "dash" && <ModeToggle style={{ position: "fixed", top: 12, right: 12, zIndex: 30 }} />}
         </div>
+        </ModeCtx.Provider>
     )
 }
 
@@ -397,7 +421,7 @@ function Survey({ p, client, project, onDone, db, preview }: any) {
         <div className="wrap" style={{ width: "100%", maxWidth: 1024, minHeight: 0 }}>
             <h1 style={{ fontSize: "clamp(34px,6vw,60px)", margin: "0 0 6px" }}>{project?.title || "Your project"}</h1>
             <div className="mono" style={{ opacity: 0.85 }}>{project?.address ? `${project.address} | ` : ""}Client: {client?.name || p.nameOverride || ""}</div>
-            <div style={{ borderBottom: "1px solid #222226", margin: "16px 0" }} />
+            <div style={{ borderBottom: "1px solid var(--line)", margin: "16px 0" }} />
             <h2 style={{ fontSize: "clamp(22px,3.4vw,32px)", letterSpacing: ".28em", textTransform: "uppercase", color: "var(--accent)", margin: "0 0 10px" }}>BEFORE WE BEGIN</h2>
             <p style={{ opacity: 0.7, maxWidth: 620, lineHeight: 1.7, margin: 0 }}>A short Design Intent Survey. Your answers shape Phase 1 and unlock your project suite.</p>
             {wait && <div className="card mono" style={{ margin: "18px 0" }}>Filing your survey and preparing your suite…</div>}
@@ -428,6 +452,7 @@ function Dashboard({ p, client, project, db }: any) {
                 </div>
                 <div className="row" style={{ gap: 10 }}>
                     <NotificationBell db={db} project={project} go={pick} />
+                    <ModeToggle />
                     <button className="btn ghost" onClick={() => db.auth.signOut()}>Sign out</button>
                 </div>
             </div>
@@ -1466,10 +1491,12 @@ function Billing({ p, project, db, client }: any) {
 }
 
 /* ───────────── Meetings: weekdays, 9–5 Pacific, 30-minute starts ───────────── */
-const SLOT_TIMES = (() => { const out: string[] = []; for (let m = 9 * 60; m <= 16 * 60 + 30; m += 30) out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${m % 60 ? "30" : "00"}`); return out })()
+const SLOT_TIMES = (() => { const out: string[] = []; for (let m = 7 * 60; m <= 19 * 60; m += 30) out.push(`${String(Math.floor(m / 60)).padStart(2, "0")}:${m % 60 ? "30" : "00"}`); return out })()
 const fmtTime = (t: string) => { const [h, m] = t.split(":").map(Number); return `${((h + 11) % 12) + 1}:${String(m).padStart(2, "0")} ${h >= 12 ? "PM" : "AM"}` }
 const MEET_TOPICS = ["Design review", "Questions about a phase or deliverable", "Site visit or field measurements", "Materials and finishes", "Budget, scope or billing", "Permits and engineering", "General check-in", "Something else"]
 function Meet({ project, db, compact }: any) {
+    const [win, setWin] = React.useState<any>({ meet_days: [2, 3, 4], meet_start: "10:00", meet_end: "13:30", meet_note: "Tuesday to Thursday · 10:00 AM to 1:30 PM Pacific" })
+    React.useEffect(() => { if (project?.id) db.from("project_cadence").select("meet_days,meet_start,meet_end,meet_note").eq("project_id", project.id).maybeSingle().then((r: any) => { if (r.data?.meet_start) setWin(r.data) }, () => {}) }, [db, project?.id])
     const [topic, setTopic] = React.useState("")
     const [comments, setComments] = React.useState("")
     const [slots, setSlots] = React.useState<{ d: string; t: string }[]>([{ d: "", t: "" }, { d: "", t: "" }])
@@ -1477,9 +1504,11 @@ function Meet({ project, db, compact }: any) {
     const [done, setDone] = React.useState("")
     const [busy, setBusy] = React.useState(false)
     const tomorrow = React.useMemo(() => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().slice(0, 10) }, [])
-    const times = SLOT_TIMES.filter((t) => { const [h, m] = t.split(":").map(Number); return h * 60 + m + dur <= 17 * 60 })
+    const toMin = (t: string) => { const [h, m] = String(t).split(":").map(Number); return h * 60 + m }
+    const times = SLOT_TIMES.filter((t) => toMin(t) >= toMin(win.meet_start) && toMin(t) + dur <= toMin(win.meet_end))
+    const okDays: number[] = win.meet_days || [2, 3, 4]
     const set = (i: number, patch: any) => setSlots(slots.map((x, k) => (k === i ? { ...x, ...patch } : x)))
-    const weekend = (d: string) => { if (!d) return false; const g = new Date(d + "T12:00:00").getDay(); return g === 0 || g === 6 }
+    const weekend = (d: string) => { if (!d) return false; const g = new Date(d + "T12:00:00").getDay(); return !okDays.includes(g) }
     async function send() {
         if (!project) return
         const chosen = slots.filter((s) => s.d && s.t && !weekend(s.d))
@@ -1493,7 +1522,7 @@ function Meet({ project, db, compact }: any) {
     return (
         <div className={compact ? "" : "card"}>
             {!compact && <div className="mono">Request a meeting</div>}
-            <p style={{ fontSize: 12, opacity: 0.6, margin: "6px 0 0" }}>Monday to Friday · 9 AM to 5 PM Pacific</p>
+            <p style={{ fontSize: 14, opacity: 0.85, margin: "6px 0 0" }}>{win.meet_note || "Tuesday to Thursday · late morning to early afternoon, Pacific"}</p>
             <select aria-label="What would you like to cover?" value={topic} onChange={(e) => setTopic(e.target.value)} style={{ marginTop: 8 }}>
                 <option value="">What would you like to cover?</option>
                 {MEET_TOPICS.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -1507,7 +1536,7 @@ function Meet({ project, db, compact }: any) {
                     </select>
                 </div>
             ))}
-            {slots.some((s) => weekend(s.d)) && <p style={{ fontSize: 12, margin: "8px 0 0" }}>We meet on weekdays. Please pick a Monday to Friday.</p>}
+            {slots.some((s) => weekend(s.d)) && <p style={{ fontSize: 14, margin: "8px 0 0" }}>That day isn't available. {win.meet_note ? `Meetings are ${win.meet_note.split("·")[0].trim()}.` : ""}</p>}
             {slots.length < 3 && <a className="mono" style={{ cursor: "pointer", textDecoration: "underline", textUnderlineOffset: 4, display: "inline-block", marginTop: 10 }} onClick={() => setSlots([...slots, { d: "", t: "" }])}>+ Add another option</a>}
             <textarea rows={2} placeholder="Comments / notes (optional)" value={comments} onChange={(e) => setComments(e.target.value)} style={{ marginTop: 14 }} maxLength={1500} />
             <div className="row" style={{ marginTop: 16 }}>
@@ -1521,7 +1550,7 @@ function Meet({ project, db, compact }: any) {
 
 /* ───────────── Project directory ───────────── */
 /* ───────────── Additive modules: Permit Path, FF&E, Ledger, Family Insights, Upcoming ───────────── */
-const LINE = "1px solid #222226"
+const LINE = "1px solid var(--line)"
 const usd = (n: any) => "$" + Number(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 function PermitPath({ project, db }: any) {
@@ -1969,7 +1998,7 @@ function ClientTasks({ project, db, studio, go }: any) {
     const [link, setLink] = React.useState("")
     const load = React.useCallback(async () => {
         if (!project?.id) return
-        const { data } = await db.from("client_tasks").select("*").eq("project_id", project.id).order("created_at", { ascending: false }); setRows(data || [])
+        const { data } = await db.from("client_tasks").select("*").eq("project_id", project.id).neq("status", "draft").order("created_at", { ascending: false }); setRows(data || [])
     }, [db, project?.id])
     React.useEffect(() => { load() }, [load])
     const add = async () => {
@@ -1993,14 +2022,12 @@ function ClientTasks({ project, db, studio, go }: any) {
                         <span aria-hidden="true" style={{ width: 18, height: 18, marginTop: 2, border: `1px solid ${col}`, display: "grid", placeItems: "center", color: col, fontSize: 12 }}>{t.status === "completed" ? "✓" : t.status === "pending_review" ? "…" : ""}</span>
                         <div>
                             <div className="brk" style={{ fontSize: 15, textDecoration: t.status === "completed" ? "line-through" : "none" }}>{t.title}</div>
-                            <div className="mono" style={{ marginTop: 4 }}>{t.due_on ? `Due ${new Date(t.due_on + "T12:00:00").toLocaleDateString()}` : "No due date"}{t.assigned_by ? ` · from ${t.assigned_by}` : ""}</div>
+                            <div className="mono" style={{ marginTop: 4 }}>{t.due_on ? `Due ${new Date(t.due_on + "T12:00:00").toLocaleDateString()}` : "No due date"}{t.assigned_by ? ` · from ${/@|^studio$/i.test(t.assigned_by) ? "Felema" : t.assigned_by}` : ""}</div>
                             <div className="row" style={{ gap: 8, marginTop: 8 }}>
                                 {t.share_url && t.status !== "completed" && <ShareLink url={t.share_url} title={t.title} />}
                                 {t.link_url && !t.share_url && t.status !== "completed" && <a className="btn" style={{ padding: "8px 12px", textDecoration: "none" }} href={t.link_url} target="_blank" rel="noreferrer">{t.link_label || "Open"} ↗</a>}
                                 {!t.link_url && t.link_target && go && t.status !== "completed" && <button className="btn" style={{ padding: "8px 12px" }} onClick={() => go(t.link_target)}>{(t.link_label || "Open").split(" · ")[0]} →</button>}
                                 {!studio && t.status === "action_required" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => submit(t.id)}>Mark done, send for review</button>}
-                                {studio && t.status !== "completed" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => setSt(t.id, "completed")}>Complete</button>}
-                                {studio && t.status !== "action_required" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => setSt(t.id, "action_required")}>Reopen</button>}
                             </div>
                         </div>
                         <span className="pill" style={{ borderColor: col, color: col, whiteSpace: "nowrap" }}>[{lab}]</span>
@@ -2008,14 +2035,7 @@ function ClientTasks({ project, db, studio, go }: any) {
                 )
             })}
             {!rows.length && <p style={{ opacity: 0.6, fontSize: 13, borderTop: LINE, paddingTop: 12, margin: 0 }}>Nothing assigned to you right now.</p>}
-            {studio && (
-                <div className="row stack-m" style={{ gap: 10, marginTop: 14, borderTop: LINE, paddingTop: 14, alignItems: "flex-end" }}>
-                    <div style={{ flex: "1 1 240px" }}><div className="mono">Assign to client</div><input value={title} maxLength={140} onChange={(e) => setTitle(e.target.value)} placeholder="Review Phase 1 Brief" /></div>
-                    <div style={{ flex: "0 1 170px" }}><div className="mono">Due</div><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></div>
-                    <div style={{ flex: "0 1 200px" }}><div className="mono">Opens</div><select value={link} onChange={(e) => setLink(e.target.value)} aria-label="Task link">{TASK_LINKS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></div>
-                    <button className="btn" onClick={add}>Assign</button>
-                </div>
-            )}
+            {studio && <p className="mono" style={{ borderTop: LINE, paddingTop: 12, marginTop: 14 }}>Preview · to assign a task, use Studio Console › Inbox (drafts stay private until you sign &amp; send)</p>}
             {msg && <p style={{ color: "var(--ochre)", fontSize: 13 }}>{msg}</p>}
         </div>
     )
@@ -2068,7 +2088,7 @@ function ReceiptsProof({ project, db, studio }: any) {
             {rows.map((r) => (
                 <div key={r.id} className="fy-rc" style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 10, padding: "12px 0", borderTop: LINE }}>
                     <div>
-                        <div className="brk" style={{ fontSize: 14 }}>{r.title}{isNew(r) && <span className="pill" style={{ marginLeft: 8, borderColor: "var(--accent)", background: "var(--accent)", color: "#0B0B0C", fontWeight: 600 }}>NEW</span>}</div>
+                        <div className="brk" style={{ fontSize: 14 }}>{r.title}{isNew(r) && <span className="pill" style={{ marginLeft: 8, borderColor: "var(--accent)", background: "var(--accent)", color: "var(--btn-ink)", fontWeight: 600 }}>NEW</span>}</div>
                         <div className="mono" style={{ marginTop: 4 }}>{KIND[r.kind] || r.kind} · {new Date(r.created_at).toLocaleDateString()}{r.vendor ? ` · ${r.vendor}` : ""}</div>
                     </div>
                     <div style={{ textAlign: "right" }}>{r.amount != null && <div style={{ fontSize: 14 }}>{usd(r.amount)}</div>}<FileLink db={db} path={r.file_path} label="Open" /></div>
@@ -2557,45 +2577,52 @@ function ScheduleHub({ p, project, db, go }: any) {
     )
 }
 
-/* ── Standing review time: the client picks one weekday + time; reviews (every 2–3 weeks) land there ── */
-const SLOT_OPTS = ["09:00", "09:30", "10:00", "10:30", "11:00", "11:30", "12:00", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00"]
+/* ── Standing review time: the studio offers two or three times; the client chooses one ── */
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
 function StandingSlot({ db, project, cfg, reload }: any) {
     const [edit, setEdit] = React.useState(false)
-    const [day, setDay] = React.useState<number>(cfg?.standing_weekday || 0)
-    const [time, setTime] = React.useState<string>(cfg?.standing_time || "10:00")
+    const [pick, setPick] = React.useState<number>(-1)
+    const [none, setNone] = React.useState(false)
     const [note, setNote] = React.useState("")
     const [msg, setMsg] = React.useState("")
     if (!cfg) return null
+    const opts: any[] = Array.isArray(cfg.standing_options) ? cfg.standing_options : []
     const set = !!cfg.standing_weekday && !edit
+    const label = (o: any) => o.label || `${DAYS[o.weekday - 1]}s at ${fmtTime(o.time)} PT`
     async function save() {
-        if (!day) return setMsg("Choose a day.")
-        const { error } = await db.rpc("client_set_standing_slot", { p_project: project.id, p_weekday: day, p_time: time, p_note: note || null })
-        if (error) setMsg("Couldn't save that. Please try again."); else { setMsg(""); setEdit(false); reload() }
+        const o = opts[pick]
+        if (!o) return setMsg("Choose one of the times.")
+        const { error } = await db.rpc("client_set_standing_slot", { p_project: project.id, p_weekday: o.weekday, p_time: o.time, p_note: note || null })
+        if (error) setMsg(error.message.includes("offered") ? error.message : "Couldn't save that. Please try again."); else { setMsg(""); setEdit(false); setPick(-1); reload() }
+    }
+    async function sendNone() {
+        const { error } = await db.rpc("client_standing_none_work", { p_project: project.id, p_note: note })
+        setMsg(error ? "Couldn't send that. Please try again." : "Sent to Felema. She'll reply with other options.")
+        if (!error) { setNone(false); setNote("") }
     }
     return (
         <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
             <div className="mono">Your standing review time</div>
             {set ? (
                 <div className="row" style={{ justifyContent: "space-between", marginTop: 8 }}>
-                    <div style={{ fontSize: 18 }}>{DAYS[cfg.standing_weekday - 1]}s at {fmtTime(cfg.standing_time)} PT</div>
-                    <a className="mono" onClick={() => setEdit(true)} style={{ textDecoration: "underline", cursor: "pointer" }}>Change</a>
+                    <div style={{ fontSize: 18 }}>{(opts.find((o) => o.weekday === cfg.standing_weekday && o.time === cfg.standing_time)?.label) || `${DAYS[cfg.standing_weekday - 1]}s at ${fmtTime(cfg.standing_time)} PT`}</div>
+                    {opts.length > 1 && <a className="mono" onClick={() => setEdit(true)} style={{ textDecoration: "underline", cursor: "pointer" }}>Change</a>}
                 </div>
+            ) : !opts.length ? (
+                <p style={{ fontSize: 15, lineHeight: 1.65, opacity: 0.85, margin: "6px 0 0" }}>Felema will offer a few review times here shortly.</p>
             ) : (
                 <>
-                    <p style={{ fontSize: 15, lineHeight: 1.65, opacity: 0.8, margin: "6px 0 10px" }}>Reviews happen every two to three weeks. Choose the weekday and time that suits you best, and we'll hold it for each one.</p>
-                    <div className="row" style={{ gap: 8 }} role="group" aria-label="Weekday">
-                        {DAYS.map((d, i) => <button key={d} className={"btn" + (day === i + 1 ? "" : " ghost")} aria-pressed={day === i + 1} onClick={() => setDay(i + 1)} style={{ padding: "10px 14px" }}>{d.slice(0, 3)}</button>)}
+                    <p style={{ fontSize: 15, lineHeight: 1.65, opacity: 0.85, margin: "6px 0 10px" }}>Reviews happen every two to three weeks. Choose the time that suits you; we'll hold it for each one.</p>
+                    <div className="grid" style={{ gap: 8 }} role="radiogroup" aria-label="Review times">
+                        {opts.map((o, i) => <button key={i} role="radio" aria-checked={pick === i} className={"btn" + (pick === i ? "" : " ghost")} onClick={() => { setPick(i); setNone(false) }} style={{ textAlign: "left", letterSpacing: ".06em", textTransform: "none", fontSize: 16 }}>{label(o)}</button>)}
                     </div>
-                    <select aria-label="Time" value={time} onChange={(e) => setTime(e.target.value)} style={{ marginTop: 10 }}>
-                        {SLOT_OPTS.map((t) => <option key={t} value={t}>{fmtTime(t)} PT</option>)}
-                    </select>
-                    <input placeholder="Anything we should know (optional)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} style={{ marginTop: 6 }} />
+                    {(pick >= 0 || none) && <input placeholder={none ? "Which days or times would work better?" : "Anything we should know (optional)"} value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} style={{ marginTop: 10 }} />}
                     <div className="row" style={{ marginTop: 12 }}>
-                        <button className="btn" onClick={save}>Save my review time</button>
-                        {edit && <button className="btn ghost" onClick={() => setEdit(false)}>Cancel</button>}
+                        {!none && <button className="btn" onClick={save} disabled={pick < 0}>Confirm this time</button>}
+                        {none ? <button className="btn" onClick={sendNone} disabled={!note.trim()}>Send to Felema</button> : <a className="mono" onClick={() => { setNone(true); setPick(-1) }} style={{ textDecoration: "underline", cursor: "pointer" }}>None of these work</a>}
+                        {(edit || none) && <button className="btn ghost" onClick={() => { setEdit(false); setNone(false) }}>Cancel</button>}
                     </div>
-                    {msg && <p role="status" style={{ fontSize: 13 }}>{msg}</p>}
+                    {msg && <p role="status" style={{ fontSize: 14 }}>{msg}</p>}
                 </>
             )}
         </div>
