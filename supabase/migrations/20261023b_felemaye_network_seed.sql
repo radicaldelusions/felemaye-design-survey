@@ -1,0 +1,55 @@
+-- FELEMAYE · Network directory seed (2026-10-23). Run after 20261023_felemaye_studio_os.sql. Safe to re-run.
+-- Every row starts as 'to_verify': the source shows they exist and what they list publicly; production / track record
+-- is NOT verified. Check DRE (LA realtors) or DOB filing history (NYC expediters) and call before referring clients.
+-- For NYC, the weekly lead scout also ranks the most active filing representatives from DOB NOW public filings.
+insert into public.network_contacts (kind, name, firm, market, area, email, phone, website, source_url, why, collaboration) values
+-- LA · realtors listed by Compass under View Park (public agent pages)
+('realtor','Historic Real Estate LA','Compass','LA','View Park','hrela@compass.com','310-779-4578',null,'https://www.compass.com/agents/locations/view-park-los-angeles-ca/457600/',
+ 'Listed by Compass as a View Park agent team; name indicates a historic-home focus (fits the 1920s–40s Spanish housing stock).','Pre-listing feasibility notes and buyer consults for historic homes; restoration-minded referrals.'),
+('realtor','Pam Lumpkin','Pam Lumpkin Real Estate Group · Compass','LA','View Park','pamlumpkin@compass.com','310-993-7085',null,'https://www.compass.com/agents/locations/view-park-los-angeles-ca/457600/',
+ 'Listed by Compass under View Park; runs a named team (plregroup@compass.com).','"What could this house become" one-pagers for listings; buyer design consults.'),
+('realtor','Lorin Ruttenberg & Erica Lockhart','Ahead of the Curve Homes · Compass','LA','View Park','aotchomes@compass.com',null,null,'https://www.compass.com/agents/locations/view-park-los-angeles-ca/457600/',
+ 'Team listed by Compass under View Park (Lorin 310-780-0214, Erica 310-350-4528).','Joint open-house design hours; referral for courtyard / ADU feasibility.'),
+('realtor','Kenya Reeves-Costa','Compass','LA','View Park','kenya.reevescosta@compass.com','323-251-8626',null,'https://www.compass.com/agents/locations/view-park-los-angeles-ca/457600/',
+ 'Listed by Compass under View Park.','Buyer consults; staging-to-design handoff.'),
+('realtor','Ron Jackson','Compass','LA','View Park','ron.jackson@compass.com','310-748-5959',null,'https://www.compass.com/agents/locations/view-park-los-angeles-ca/457600/',
+ 'Listed by Compass under View Park.','Buyer consults.'),
+('realtor','Johnny Hayes','Compass','LA','View Park','johnny.hayes@compass.com','310-210-5200',null,'https://www.compass.com/agents/locations/view-park-los-angeles-ca/457600/',
+ 'Listed by Compass under View Park.','Buyer consults.'),
+('realtor','Jimmi Weaver',null,'LA','Crenshaw · Leimert Park',null,null,null,'https://www.yelp.com/biz/jimmi-weaver-los-angeles',
+ 'Crenshaw Blvd office; Yelp listing with client reviews.','Neighborhood referral partner; co-host a homeowner talk on permits and additions.'),
+('realtor','Heather Presha',null,'LA','South LA neighborhoods',null,null,'https://www.heatherpresha.com','https://www.heatherpresha.com/communities',
+ 'Publishes South LA neighborhood guides (View Park, Baldwin Hills, Leimert Park and others).','Guest design content for her neighborhood guides; buyer referrals.'),
+('broker',null,'LA Top Broker','LA','Windsor Hills',null,null,null,'https://www.mapquest.com/us/california/la-top-broker-543179590',
+ 'Brokerage office at 4602 Crenshaw Blvd, Windsor Hills (per directory listing).','Local office relationship; ask about investor clients doing renovations.'),
+-- LA · permit expediters (firm websites)
+('expediter',null,'Permit Place','LA','LADBS · LA County',null,null,'https://permitplace.com','https://permitplace.com/permitting-services/permit-expediting/california-permit-expediting/los-angeles/',
+ 'Firm page for Los Angeles permit expediting.','Backup filing support on LADBS / EPIC-LA submittals.'),
+('expediter',null,'Crest Real Estate','LA','LA City · County',null,null,'https://www.crestrealestate.com','https://www.crestrealestate.com/loc/los-angeles/',
+ 'Lists Los Angeles permit expediting and zoning services.','Zoning research and entitlement help on larger residential work.'),
+('expediter',null,'It''s Just Permits','LA','City of Los Angeles',null,null,'https://www.itsjustpermits.com','https://www.itsjustpermits.com/permit-expediting',
+ 'Lists City of Los Angeles permit expediting.','Plan check runner for LADBS jobs.'),
+('expediter',null,'Cornerstone Permit','LA','Los Angeles',null,null,'https://cornerstonepermit.com','https://cornerstonepermit.com/los-angeles-permits/',
+ 'Lists LA permit expediting.','Plan check runner.'),
+('expediter',null,'Strom Permit','LA','LA County · LADBS · CUPs',null,null,'https://strompermit.com','https://strompermit.com/los-angeles-county/',
+ 'Lists LA County permits, LADBS and CUPs.','Unincorporated LA County filings (EPIC-LA) — relevant to View Park.'),
+('expediter',null,'LA Expedite','LA','Los Angeles',null,null,'https://laexpedite.com','https://laexpedite.com/',
+ 'Architects, engineers and permit expediting services.','Overflow drafting + expediting on tight timelines.'),
+('expediter',null,'National Building Permits','LA','Los Angeles',null,null,'https://nationalbuildingpermits.com','https://nationalbuildingpermits.com/los-angeles-ca/',
+ 'Lists Los Angeles permit expediting.','Backup expediter.'),
+-- NY · expediters (firm websites)
+('expediter',null,'Expedix Expediting Group','NY','NYC',null,null,'https://expedixgroup.com','https://expedixgroup.com/',
+ 'NYC expediting firm website.','DOB NOW filings for residential alterations.'),
+('expediter',null,'All Boro Expediter','NY','All five boroughs',null,null,'https://www.allboroexpediter.com','https://www.allboroexpediter.com/about-us/',
+ 'NYC expediting firm website.','DOB / DOT filings.'),
+('expediter',null,'ACDE Group','NY','NYC',null,null,'https://www.acdegroup.com','https://www.acdegroup.com/services/dob-expediting-nyc',
+ 'Lists DOB expediting in NYC.','DOB NOW filing representative.'),
+('expediter',null,'Direct Access Expediting','NY','NYC',null,null,'https://directaccessexpediting.com','https://directaccessexpediting.com/',
+ 'Lists NYC DOB, DOT and LPC expediting.','Landmarks (LPC) filings for brownstones.'),
+('expediter',null,'Noel Building Consulting','NY','NYC',null,null,'https://noel-bldg.com','https://noel-bldg.com/',
+ 'NYC building consulting / expediting firm website.','Code consulting + filings.'),
+('expediter',null,'JY Expediters Group','NY','Brooklyn',null,null,null,'https://www.houzz.com/professionals/building-designers-and-drafters/jy-expediters-group-pfvwus-pf~379276556',
+ 'Brooklyn expediter listed on Houzz with project photos.','Brooklyn residential filings.'),
+('expediter',null,'New York Expediting','NY','NYC',null,null,'https://nyexpeditingservices.com','https://nyexpeditingservices.com/',
+ 'NYC expediting services website.','Backup expediter.')
+on conflict (kind, firm, name) do nothing;

@@ -188,7 +188,7 @@ export default function ClientPortal(p: Props) {
     .fyp .gh{grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);align-items:start}
     .fyp .navgrid{display:grid;gap:1px;background:color-mix(in srgb,var(--ink) 22%,transparent);border:1px solid color-mix(in srgb,var(--ink) 22%,transparent);margin:0 0 28px}
     .fyp .navgrid .row2{display:grid;grid-template-columns:minmax(0,1fr);gap:1px}
-    .fyp .navgrid .row5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px}
+    .fyp .navgrid .row5{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:1px}.fyp .navgrid .row5>.nv:last-child:nth-child(5n+1){grid-column:1/-1}
     .fyp .nv{background:var(--paper);color:var(--ink);border:0;border-radius:0;min-height:52px;padding:10px 8px;font:500 11px ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;text-align:center;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1.35}
     .fyp .nv:hover{background:color-mix(in srgb,var(--accent) 14%,var(--paper))}
     .fyp .nv[aria-selected=true],.fyp .nv[aria-current=page]{background:var(--accent);color:var(--paper)}
@@ -202,7 +202,7 @@ export default function ClientPortal(p: Props) {
     .fyp .actf button[aria-pressed=true]{background:var(--accent);color:var(--paper)}.fyp .actf button:focus-visible{outline:2px solid var(--accent)}
     .fyp .phbar{flex:1;height:6px;background:#222226;position:relative;overflow:hidden}.fyp .phbar i{position:absolute;inset:0 auto 0 0;transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
     .fyp .g2{grid-template-columns:1.4fr 1fr}
-    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow{grid-template-columns:92px minmax(0,1fr)}.fyp .actrow .sd{grid-column:2}.fyp .actrow .tx{grid-column:2}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
+    @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow{grid-template-columns:92px minmax(0,1fr)}.fyp .actrow .sd{grid-column:2}.fyp .actrow .tx{grid-column:2}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .navgrid .row5>.nv:last-child:nth-child(5n+1){grid-column:auto}.fyp .navgrid .row5>.nv:last-child:nth-child(odd){grid-column:1/-1}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
     .fyp img,.fyp iframe{max-width:100%}
     .fyp .tabs{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-start;gap:8px;width:100%;margin-bottom:24px;padding-bottom:20px;border-bottom:1px solid var(--line)}
     .fyp .tabs::-webkit-scrollbar{display:none}
@@ -415,7 +415,9 @@ function Dashboard({ p, client, project, db }: any) {
     const [tab, setTab] = React.useState("home")
     const first = (client?.name || p.nameOverride || "").split(" ")[0]
     // Primary sub-navigation (directive order). CHECKPOINTS = the Phases view. Everything else stays reachable in "More".
-    const menu = [["roadmap", "Roadmap"], ["ledger", "Ledger"], ["phases", "Checkpoints"], ["family", "Family Insights"], ["team", "Directory"], ["boards", "Mood Boards"], ["files", "Files"], ["permit", "Permit Path"], ["ffe", "FF&E"], ["billing", "Billing"]]
+    const counts = usePortalCounts(db, project)
+    const badge: Record<string, number> = { messages: Number(counts.unread_messages || 0), ledger: Number(counts.pending_statements || 0), home: Number(counts.open_tasks || 0) }
+    const menu = [["messages", "Messages"], ["roadmap", "Roadmap"], ["ledger", "Ledger"], ["phases", "Checkpoints"], ["family", "Family Insights"], ["team", "Directory"], ["boards", "Mood Boards"], ["files", "Files"], ["permit", "Permit Path"], ["ffe", "FF&E"], ["billing", "Billing"]]
     const pick = (k: string) => { setTab(k); try { window.scrollTo({ top: 0, behavior: "smooth" }) } catch {} }
     return (
         <div className="wrap">
@@ -431,10 +433,10 @@ function Dashboard({ p, client, project, db }: any) {
             </div>
             <nav className="navgrid" aria-label="Project navigation">
                 <div className="row2">
-                    <button className="nv" aria-current={tab === "home" ? "page" : undefined} onClick={() => pick("home")}>Home</button>
+                    <button className="nv" aria-current={tab === "home" ? "page" : undefined} onClick={() => pick("home")}>Home{badge.home > 0 && <span className="nvb" aria-label={`${badge.home} to do`}>{badge.home}</span>}</button>
                 </div>
                 <div className="row5" role="tablist" aria-label="Project sections">
-                    {menu.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="nv" onClick={() => pick(k)}>{l}</button>)}
+                    {menu.map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className="nv" onClick={() => pick(k)}>{l}{badge[k] > 0 && <span className="nvb" aria-label={`${badge[k]} new`}>{badge[k]}</span>}</button>)}
                 </div>
             </nav>
             {tab === "home" && <Home p={p} project={project} db={db} go={pick} />}
@@ -445,7 +447,8 @@ function Dashboard({ p, client, project, db }: any) {
             {tab === "team" && <Directory project={project} db={db} />}
             {tab === "permit" && <PermitPath project={project} db={db} />}
             {tab === "ffe" && <FFE project={project} db={db} />}
-            {tab === "ledger" && <Ledger project={project} db={db} go={pick} />}
+            {tab === "ledger" && <div className="grid"><StatementWidget db={db} project={project} go={pick} /><Ledger project={project} db={db} go={pick} /></div>}
+            {tab === "messages" && <PortalMessages db={db} project={project} client={client} />}
             {tab === "family" && <FamilyInsights p={p} project={project} db={db} />}
             {tab === "billing" && <Billing p={p} project={project} db={db} client={client} />}
             {tab === "meet" && <Meet project={project} db={db} />}
@@ -1992,7 +1995,8 @@ function ClientTasks({ project, db, studio, go }: any) {
                             <div className="brk" style={{ fontSize: 15, textDecoration: t.status === "completed" ? "line-through" : "none" }}>{t.title}</div>
                             <div className="mono" style={{ marginTop: 4 }}>{t.due_on ? `Due ${new Date(t.due_on + "T12:00:00").toLocaleDateString()}` : "No due date"}{t.assigned_by ? ` · from ${t.assigned_by}` : ""}</div>
                             <div className="row" style={{ gap: 8, marginTop: 8 }}>
-                                {t.link_url && t.status !== "completed" && <a className="btn" style={{ padding: "8px 12px", textDecoration: "none" }} href={t.link_url} target="_blank" rel="noreferrer">{t.link_label || "Open"} ↗</a>}
+                                {t.share_url && t.status !== "completed" && <ShareLink url={t.share_url} title={t.title} />}
+                                {t.link_url && !t.share_url && t.status !== "completed" && <a className="btn" style={{ padding: "8px 12px", textDecoration: "none" }} href={t.link_url} target="_blank" rel="noreferrer">{t.link_label || "Open"} ↗</a>}
                                 {!t.link_url && t.link_target && go && t.status !== "completed" && <button className="btn" style={{ padding: "8px 12px" }} onClick={() => go(t.link_target)}>{(t.link_label || "Open").split(" · ")[0]} →</button>}
                                 {!studio && t.status === "action_required" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => submit(t.id)}>Mark done, send for review</button>}
                                 {studio && t.status !== "completed" && <button className="btn ghost" style={{ padding: "8px 12px" }} onClick={() => setSt(t.id, "completed")}>Complete</button>}
@@ -2014,6 +2018,21 @@ function ClientTasks({ project, db, studio, go }: any) {
             )}
             {msg && <p style={{ color: "var(--ochre)", fontSize: 13 }}>{msg}</p>}
         </div>
+    )
+}
+
+function ShareLink({ url, title }: any) {
+    const [done, setDone] = React.useState("")
+    const share = async () => {
+        const text = "Help shape our courtyard — a 5-minute survey from our designer, FELEMAYE."
+        try { if ((navigator as any).share) { await (navigator as any).share({ title: title || "Family survey", text, url }); setDone("Shared"); return } } catch { return }
+        try { await navigator.clipboard.writeText(url); setDone("Link copied") } catch { window.prompt("Copy this link:", url) }
+    }
+    return (
+        <>
+            <button className="btn" style={{ padding: "8px 12px" }} onClick={share}>{done || "Share the survey link"}</button>
+            <a className="btn ghost" style={{ padding: "8px 12px", textDecoration: "none" }} href={url} target="_blank" rel="noreferrer">Preview ↗</a>
+        </>
     )
 }
 
@@ -2117,7 +2136,15 @@ const CAD_CSS = `
 .fyp .cad-tag[data-k=live]{border-color:var(--accent);color:var(--accent)}.fyp .cad-tag[data-k=async]{color:var(--slate);border-color:var(--slate)}
 .fyp .cad-tag[data-k=done]{color:var(--sage);border-color:var(--sage)}
 .fyp .cad-dot{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
-.fyp .bell{position:relative}.fyp .bell b{position:absolute;top:-6px;right:-6px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#0B0B0C;font:700 10px/18px ui-monospace,Menlo,monospace;text-align:center;padding:0 4px}
+.fyp .bell{position:relative;display:inline-flex;align-items:center;gap:10px}.fyp .bell.has{border-color:var(--accent)!important;color:var(--accent)}.fyp .bell b{display:inline-block;min-width:28px;height:28px;border-radius:14px;background:var(--accent);color:#fff;font:700 14px/28px 'Helvetica Neue',Helvetica,Arial,sans-serif;text-align:center;padding:0 8px;letter-spacing:0}
+.fyp .nvb{display:inline-block;min-width:22px;height:22px;border-radius:11px;background:var(--accent);color:#fff;font:700 12px/22px 'Helvetica Neue',Helvetica,Arial,sans-serif;letter-spacing:0;margin-left:8px;padding:0 6px}
+.fyp .nv[aria-selected=true] .nvb,.fyp .nv[aria-current=page] .nvb{background:var(--ink);color:var(--paper)}
+.fyp .ptoast{position:fixed;right:16px;bottom:16px;z-index:9999;max-width:min(380px,calc(100vw - 32px));background:var(--ink);color:var(--paper);padding:16px 18px;font-size:15px;line-height:1.5;box-shadow:0 14px 34px rgba(0,0,0,.28);cursor:pointer;text-align:left;border:0}
+.fyp .pthread{display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow:auto;padding:4px 2px}
+.fyp .pmsg{max-width:80%;padding:14px 16px;font-size:16px;line-height:1.65;white-space:pre-wrap;border:1px solid color-mix(in srgb,var(--ink) 16%,transparent);background:var(--paper);color:var(--ink)}
+.fyp .pmsg.me{align-self:flex-end;background:var(--ink);color:var(--paper)}
+.fyp .pmsg small{display:block;font:11px ui-monospace,Menlo,monospace;letter-spacing:.1em;opacity:.65;margin-top:8px}
+@media(max-width:600px){.fyp .pmsg{max-width:94%}}
 .fyp .ntf{position:absolute;right:0;top:calc(100% + 8px);width:min(420px,calc(100vw - 28px));z-index:20;background:var(--paper);color:var(--ink);border:1px solid color-mix(in srgb,var(--ink) 18%,transparent);box-shadow:0 18px 50px rgba(0,0,0,.18);max-height:70vh;overflow:auto;text-align:left}
 .fyp .ntf button.it{all:unset;box-sizing:border-box;display:grid;grid-template-columns:8px minmax(0,1fr);gap:12px;width:100%;padding:16px 18px;border-top:1px solid color-mix(in srgb,var(--ink) 12%,transparent);cursor:pointer;color:var(--ink)}
 .fyp .ntf button.it:hover,.fyp .ntf button.it:focus-visible{background:color-mix(in srgb,var(--accent) 8%,transparent)}
@@ -2182,15 +2209,52 @@ function calLinks(e: any) {
 }
 
 /* ── Notification bell (header) ── */
+// Portal counts (unread updates, unread messages, open tasks, statements to approve) — one source for the bell, nav and tab title.
+function usePortalCounts(db: any, project: any) {
+    const [c, setC] = React.useState<any>({ unread_notifications: 0, unread_messages: 0, open_tasks: 0, pending_statements: 0 })
+    const load = React.useCallback(async () => {
+        if (!project?.id) return
+        const { data, error } = await db.rpc("notification_counts", { p_project: project.id })
+        if (!error && data?.[0]) return setC(data[0])
+        const n = await db.from("portal_notifications").select("id", { count: "exact", head: true }).eq("project_id", project.id).eq("audience", "client").is("read_at", null)
+        setC((x: any) => ({ ...x, unread_notifications: n.count || 0 }))
+    }, [db, project?.id])
+    React.useEffect(() => {
+        load()
+        const t = setInterval(load, 30000)
+        const on = () => load()
+        window.addEventListener("fy-counts", on)
+        return () => { clearInterval(t); window.removeEventListener("fy-counts", on) }
+    }, [load])
+    return c
+}
+const bumpCounts = () => { try { window.dispatchEvent(new Event("fy-counts")) } catch {} }
+
 function NotificationBell({ db, project, go }: any) {
     const [rows, setRows] = React.useState<any[]>([])
     const [open, setOpen] = React.useState(false)
+    const [toast, setToast] = React.useState<any>(null)
     const ref = React.useRef<HTMLDivElement>(null)
+    const seen = React.useRef<Set<string> | null>(null)
+    const counts = usePortalCounts(db, project)
     const load = React.useCallback(() => {
         if (!project?.id) return
-        db.from("portal_notifications").select("*").eq("project_id", project.id).eq("audience", "client").order("created_at", { ascending: false }).limit(25).then((r: any) => setRows(r.data || []), () => {})
+        db.from("portal_notifications").select("*").eq("project_id", project.id).eq("audience", "client").order("created_at", { ascending: false }).limit(25).then((r: any) => {
+            const data = r.data || []
+            if (seen.current) { const fresh = data.find((x: any) => !x.read_at && !seen.current!.has(x.id)); if (fresh) { setToast(fresh); setTimeout(() => setToast(null), 8000) } }
+            seen.current = new Set(data.map((x: any) => x.id))
+            setRows(data); bumpCounts()
+        }, () => {})
     }, [db, project?.id])
-    React.useEffect(() => { load(); const t = setInterval(load, 60000); return () => clearInterval(t) }, [load])
+    React.useEffect(() => {
+        load()
+        const t = setInterval(load, 30000)
+        let ch: any
+        try { ch = db.channel("fy-bell-" + project?.id).on("postgres_changes", { event: "INSERT", schema: "public", table: "portal_notifications", filter: `project_id=eq.${project?.id}` }, () => load()).subscribe() } catch {}
+        const vis = () => document.visibilityState === "visible" && load()
+        document.addEventListener("visibilitychange", vis)
+        return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); try { ch && db.removeChannel(ch) } catch {} }
+    }, [load])
     React.useEffect(() => {
         if (!open) return
         const off = (e: any) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
@@ -2198,23 +2262,30 @@ function NotificationBell({ db, project, go }: any) {
         document.addEventListener("mousedown", off); document.addEventListener("keydown", esc)
         return () => { document.removeEventListener("mousedown", off); document.removeEventListener("keydown", esc) }
     }, [open])
-    const unread = rows.filter((r) => !r.read_at).length
+    const unread = Math.max(rows.filter((r) => !r.read_at).length, Number(counts.unread_notifications || 0))
+    const total = unread + Number(counts.unread_messages || 0)
+    React.useEffect(() => {
+        const base = (project?.title || "Your suite") + " · FELEMAYE"
+        try { document.title = total ? `(${total}) ${base}` : base } catch {}
+    }, [total, project?.title])
     const toggle = () => {
         const n = !open; setOpen(n)
         if (n && unread) db.rpc("mark_notifications_read", { p_project: project.id }).then(() => setTimeout(load, 4000), () => {})
     }
     const ago = (t: string) => { const m = Math.round((Date.now() - new Date(t).getTime()) / 60000); return m < 60 ? `${Math.max(1, m)} min ago` : m < 1440 ? `${Math.round(m / 60)} h ago` : fmtD(new Date(t)) }
+    const openItem = (r: any) => { setOpen(false); setToast(null); if (r.link_target) go(r.link_target) }
     return (
         <div ref={ref} style={{ position: "relative" }} className="cad">
             <style>{CAD_CSS}</style>
-            <button className="btn ghost bell" aria-haspopup="true" aria-expanded={open} aria-label={`Notifications${unread ? `, ${unread} new` : ""}`} onClick={toggle}>
-                Updates{unread > 0 && <b>{unread}</b>}
+            <button className={"btn ghost bell" + (total ? " has" : "")} aria-haspopup="true" aria-expanded={open} aria-label={`Notifications${total ? `, ${total} new` : ""}`} onClick={toggle}>
+                Updates{total > 0 && <b>{total}</b>}
             </button>
             {open && (
                 <div className="ntf" role="dialog" aria-label="Notifications">
-                    <div className="mono" style={{ padding: "14px 16px" }}>Studio updates</div>
+                    <div className="mono" style={{ padding: "14px 16px" }}>Studio updates{counts.unread_messages ? ` · ${counts.unread_messages} new message${counts.unread_messages > 1 ? "s" : ""}` : ""}</div>
+                    {counts.unread_messages > 0 && <button className="it" onClick={() => { setOpen(false); go("messages") }}><span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, background: "var(--accent)" }} /><span style={{ fontSize: 15.5 }}>Open your messages →</span></button>}
                     {rows.map((r) => (
-                        <button key={r.id} className="it" onClick={() => { setOpen(false); if (r.link_target) go(r.link_target) }}>
+                        <button key={r.id} className="it" onClick={() => openItem(r)}>
                             <span style={{ width: 8, height: 8, borderRadius: 4, marginTop: 6, background: r.read_at ? "transparent" : "var(--accent)", border: "1px solid var(--accent)" }} />
                             <span style={{ minWidth: 0 }}>
                                 <span style={{ display: "block", fontSize: 15.5, lineHeight: 1.4 }} className="brk">{r.title}</span>
@@ -2226,6 +2297,129 @@ function NotificationBell({ db, project, go }: any) {
                     {!rows.length && <p style={{ padding: "0 16px 16px", fontSize: 13, opacity: 0.6, margin: 0 }}>You're all caught up.</p>}
                 </div>
             )}
+            {toast && <button className="ptoast" role="status" onClick={() => openItem(toast)}><span className="mono" style={{ display: "block", opacity: 0.7, color: "inherit" }}>New from the studio</span>{toast.title}</button>}
+        </div>
+    )
+}
+
+/* ── Conversation with the studio ── */
+function PortalMessages({ db, project, client }: any) {
+    const [rows, setRows] = React.useState<any[]>([])
+    const [body, setBody] = React.useState("")
+    const [files, setFiles] = React.useState<File[]>([])
+    const [busy, setBusy] = React.useState(false)
+    const [err, setErr] = React.useState("")
+    const end = React.useRef<HTMLDivElement>(null)
+    const fileRef = React.useRef<HTMLInputElement>(null)
+    const load = React.useCallback(async () => {
+        if (!project?.id) return
+        const { data } = await db.from("project_messages").select("*").eq("project_id", project.id).order("created_at")
+        setRows(data || [])
+        db.rpc("mark_messages_read", { p_project: project.id }).then(bumpCounts, () => {})
+        setTimeout(() => end.current?.scrollIntoView({ block: "end" }), 60)
+    }, [db, project?.id])
+    React.useEffect(() => {
+        load()
+        let ch: any
+        try { ch = db.channel("fy-msg-" + project?.id).on("postgres_changes", { event: "INSERT", schema: "public", table: "project_messages", filter: `project_id=eq.${project?.id}` }, () => load()).subscribe() } catch {}
+        const t = setInterval(load, 45000)
+        return () => { clearInterval(t); try { ch && db.removeChannel(ch) } catch {} }
+    }, [load])
+    const openFile = async (path: string) => { const { data } = await db.storage.from("project-files").createSignedUrl(path, 300); if (data?.signedUrl) window.open(data.signedUrl, "_blank", "noopener") }
+    async function send(e?: React.FormEvent) {
+        e?.preventDefault()
+        if (!body.trim() || busy) return
+        setBusy(true); setErr("")
+        const att: any[] = []
+        for (const f of files) {
+            const path = `${project.id}/client/messages/${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_")}`
+            const { error } = await db.storage.from("project-files").upload(path, f)
+            if (error) { setErr("That attachment didn't upload. Try a smaller file, or send it from Files."); setBusy(false); return }
+            att.push({ name: f.name, path })
+        }
+        const { error } = await db.rpc("post_message", { p_project: project.id, p_body: body, p_attachments: att })
+        setBusy(false)
+        if (error) return setErr("Couldn't send just now. Please try again in a moment.")
+        setBody(""); setFiles([]); load()
+    }
+    return (
+        <div className="grid g2" style={{ alignItems: "start" }}>
+            <div className="card">
+                <div className="mono">Messages</div>
+                <h2 style={{ fontSize: 28, margin: "8px 0 12px" }}>Talk with the studio</h2>
+                <div className="pthread" aria-live="polite">
+                    {rows.map((m) => (
+                        <div key={m.id} className={"pmsg" + (m.sender_role === "client" ? " me" : "")}>
+                            {m.body}
+                            {(m.attachments || []).map((a: any) => <button key={a.path} className="btn ghost" style={{ display: "block", marginTop: 10, color: "inherit", borderColor: "currentColor" }} onClick={() => openFile(a.path)}>{a.name}</button>)}
+                            <small>{m.sender_role === "client" ? "You" : "Felema · FELEMAYE"} · {new Date(m.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</small>
+                        </div>
+                    ))}
+                    {!rows.length && <p style={{ fontSize: 15, opacity: 0.7, margin: 0 }}>Ask anything here — a question about a drawing, a photo of something you love, a change of plans. Felema is notified right away and replies here; you'll also get an email.</p>}
+                    <div ref={end} />
+                </div>
+                <form onSubmit={send} style={{ marginTop: 14 }}>
+                    <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} placeholder="Write a message…" aria-label="Message" style={{ width: "100%", minHeight: 96, fontSize: 16 }} />
+                    <input ref={fileRef} type="file" multiple style={{ display: "none" }} onChange={(e) => setFiles(Array.from(e.target.files || []))} />
+                    <div className="row stack-m" style={{ gap: 10, marginTop: 10 }}>
+                        <button className="btn" disabled={busy || !body.trim()}>{busy ? "Sending…" : "Send"}</button>
+                        <button type="button" className="btn ghost" onClick={() => fileRef.current?.click()}>{files.length ? `${files.length} file${files.length > 1 ? "s" : ""} attached` : "Attach photos or files"}</button>
+                    </div>
+                    {err && <p style={{ color: "var(--ochre)", fontSize: 13 }}>{err}</p>}
+                </form>
+            </div>
+            <div className="card">
+                <div className="mono">How we stay in touch</div>
+                <p style={{ fontSize: 15, lineHeight: 1.7 }}>Messages are the fastest way to reach the studio between reviews. Felema replies within one business day, usually sooner. For anything that needs a conversation, request a meeting from Home.</p>
+                <p style={{ fontSize: 15, lineHeight: 1.7, marginBottom: 0 }}>Every update — a new file, a presentation, a statement, a reply — shows in <b>Updates</b> at the top of your suite and arrives by email to {client?.email || "you"}.</p>
+            </div>
+        </div>
+    )
+}
+
+/* ── Reimbursable statements (batched, one-click approval) ── */
+function StatementWidget({ db, project, go }: any) {
+    const [rows, setRows] = React.useState<any[]>([])
+    const [reply, setReply] = React.useState<Record<string, string>>({})
+    const [msg, setMsg] = React.useState("")
+    const load = React.useCallback(async () => { if (!project?.id) return; const { data } = await db.rpc("client_statements", { p_project: project.id }); setRows(data || []) }, [db, project?.id])
+    React.useEffect(() => { load() }, [load])
+    const approve = async (s: any) => {
+        if (!window.confirm(`Approve ${s.period_label} (${usd(s.total)})?`)) return
+        const { error } = await db.rpc("client_approve_statement", { p_id: s.id, p_reply: reply[s.id] || null })
+        setMsg(error ? "Couldn't record that. Please try again." : "Approved — thank you. The studio has been notified."); load(); bumpCounts()
+    }
+    if (!rows.length) return null
+    return (
+        <div className="card">
+            <div className="mono">Reimbursable statements</div>
+            <h2 style={{ fontSize: 26, margin: "8px 0 6px" }}>One summary per period</h2>
+            <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7, margin: "0 0 10px" }}>Small pass-through costs are grouped into a single statement so you approve once, not item by item.</p>
+            {rows.map((s) => (
+                <div key={s.id} style={{ borderTop: LINE, padding: "16px 0" }}>
+                    <div className="row" style={{ justifyContent: "space-between", flexWrap: "nowrap", gap: 10 }}>
+                        <span style={{ fontSize: 16 }}>{s.period_label}<span className="mono" style={{ display: "block", marginTop: 4 }}>{s.number}</span></span>
+                        <b style={{ fontSize: 22 }}>{usd(s.total)}</b>
+                    </div>
+                    {(s.lines || []).map((l: any) => (
+                        <div key={l.label} className="row" style={{ justifyContent: "space-between", fontSize: 14, marginTop: 8, flexWrap: "nowrap", gap: 10 }}>
+                            <span className="brk">{l.label}{l.count > 1 ? ` (${l.count})` : ""}</span><span>{usd(l.amount)}</span>
+                        </div>
+                    ))}
+                    {s.client_note && <p style={{ fontSize: 14, opacity: 0.8 }}>{s.client_note}</p>}
+                    <div className="row stack-m" style={{ gap: 8, marginTop: 12 }}>
+                        {s.status === "sent" && <>
+                            <input placeholder="Note to the studio (optional)" value={reply[s.id] || ""} onChange={(e) => setReply({ ...reply, [s.id]: e.target.value })} style={{ flex: "1 1 220px" }} />
+                            <button className="btn" onClick={() => approve(s)}>Approve statement</button>
+                        </>}
+                        {s.status === "approved" && <span className="pill" style={{ borderColor: "var(--sage)", color: "var(--sage)" }}>Approved {s.approved_at ? new Date(s.approved_at).toLocaleDateString() : ""}</span>}
+                        {s.status === "paid" && <span className="pill">Paid</span>}
+                        {s.pay_url && s.status !== "paid" && <a className="btn ghost" href={s.pay_url} target="_blank" rel="noreferrer" style={{ textDecoration: "none" }}>Pay ↗</a>}
+                        {!s.pay_url && s.status === "approved" && go && <button className="btn ghost" onClick={() => go("billing")}>How to pay →</button>}
+                    </div>
+                </div>
+            ))}
+            {msg && <p style={{ fontSize: 13 }}>{msg}</p>}
         </div>
     )
 }

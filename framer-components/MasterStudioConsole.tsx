@@ -21,6 +21,9 @@ import SurfaceStudioTab from "./SurfaceStudioTab.tsx"
 // v9 (2026-10-20): Vignettes desk: inventory status, live staging calendar, bookings, invoices with use tax,
 // usage agreement, capital and tax ledger (VignetteStudioConsole.tsx + 20261020_vignettes_ops_ledger.sql).
 import VignetteStudioConsole from "./VignetteStudioConsole.tsx"
+// V5 Studio OS (2026-10-23): company dashboard, notification centre, inbox + conversation + task templates,
+// Reimbursables v2 + statements, Proposal & Fee Builder, Network directory, vendor triage (StudioOS.tsx + 20261023 SQL).
+import { NotifCenter, InboxTab, ReimbursablesV2, ProposalBuilder, GrowthDashboard, NetworkDirectory, VendorTriage } from "./StudioOS.tsx"
 // V4 MASTER (2026-10-22) — MasterStudioConsole: Atelier palette + Studio Admin / Client Experience view toggle,
 // Time Bank & EHR with burn alerts, 50/25/25 waterfall, Zoning/Muni engine + Sheet A-001, sub-consultant RFP matrix,
 // trade-bot job queue and Studio Admin Drive refs (needs 20261022_felemaye_master_ecosystem.sql).
@@ -47,6 +50,8 @@ type Props = {
     defaultView?: "admin" | "client"
 }
 const ADMIN_TABS = [
+    "dashboard",
+    "inbox",
     "clients",
     "meetings",
     "cadence",
@@ -61,6 +66,8 @@ const ADMIN_TABS = [
     "permits",
     "zoning",
     "consultants",
+    "network",
+    "proposals",
     "finances",
     "waterfall",
     "compliance",
@@ -194,7 +201,7 @@ export default function MasterStudioConsole(p: Props) {
     >("boot")
     const [email, setEmail] = React.useState("")
     const [msg, setMsg] = React.useState("")
-    const [tab, setTab] = React.useState("clients")
+    const [tab, setTab] = React.useState("dashboard")
     // V4: Studio Admin (net costs, discounts, burn, raw notes) vs Client Experience Portal (client-safe only)
     const [viewMode, setViewModeRaw] = React.useState<"admin" | "client">(() => {
         try {
@@ -349,6 +356,7 @@ export default function MasterStudioConsole(p: Props) {
                     </div>
                 </div>
                 <div className="r">
+                    <NotifCenter db={db} openTab={(t: string) => { setViewMode("admin"); setTab(t) }} setFocus={setFocus} />
                     {(viewMode === "admin" ? ADMIN_TABS : []).map((t) => (
                         <button
                             key={t}
@@ -385,7 +393,15 @@ export default function MasterStudioConsole(p: Props) {
                 }}
                 openTab={setTab}
             />
-            {tab === "clients" ? (
+            {tab === "dashboard" ? (
+                <GrowthDashboard db={db} openTab={setTab} />
+            ) : tab === "inbox" ? (
+                <InboxTab db={db} focus={focus} />
+            ) : tab === "proposals" ? (
+                <ProposalBuilder db={db} focus={focus} />
+            ) : tab === "network" ? (
+                <NetworkDirectory db={db} />
+            ) : tab === "clients" ? (
                 <Clients
                     db={db}
                     portalUrl={p.portalUrl}
@@ -407,7 +423,7 @@ export default function MasterStudioConsole(p: Props) {
             ) : tab === "waterfall" ? (
                 <Waterfall db={db} />
             ) : tab === "reimbursables" ? (
-                <Reimbursables db={db} focus={focus} />
+                <ReimbursablesV2 db={db} focus={focus} />
             ) : tab === "ffe" ? (
                 <FFEManager db={db} projectId={focus} />
             ) : tab === "calendar" ? (
@@ -416,6 +432,7 @@ export default function MasterStudioConsole(p: Props) {
                 <PermitManager db={db} projectId={focus} />
             ) : tab === "vendors" ? (
                 <>
+                    <VendorTriage db={db} />
                     <TradeJobsPanel db={db} />
                     <VendorVaultTab db={db} focus={focus} />
                 </>
