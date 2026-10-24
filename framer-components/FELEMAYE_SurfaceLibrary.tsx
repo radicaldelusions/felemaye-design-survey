@@ -9,13 +9,94 @@
 import * as React from "react"
 import { addPropertyControls, ControlType } from "framer"
 
-type Props = { supabaseUrl: string; publishableKey: string; heading: string; intro: string; requestHref: string; licensingTitle: string; licensingCopy: string; collaborators: string; style?: React.CSSProperties }
+type Props = { showHero?: boolean; handImage?: string; handTipX?: number; handTipY?: number; handWidth?: number; heroCopy?: string; heroCaption?: string; supabaseUrl: string; publishableKey: string; heading: string; intro: string; requestHref: string; licensingTitle: string; licensingCopy: string; collaborators: string; style?: React.CSSProperties }
 type Item = { id: string; name: string; material_type: string; origin: string | null; applications: string[] | null; finish: string | null; description: string | null; image_path: string | null; trade_sample: boolean; public_preview: boolean }
-const DEF = { supabaseUrl: "https://afejhlfwymwagstyfnse.supabase.co", publishableKey: "sb_publishable_DxxomxoBSa8QkC6pBzYf5A_O86rctbV", heading: "Surface Library", intro: "A considered library of specialty pattern and surface systems, and trade samples. Access and licensing are arranged directly with the studio. Filter by material, origin and where it will live.", requestHref: "/inquiry?vertical=surface-library", licensingTitle: "Licensing & collaboration", licensingCopy: "FELEMAYE Surface Studio develops original wallcoverings, woven textiles, plaster finishes, tile and stone, and architectural hardware for licensing and brand collaboration. Collections are designed for hospitality and residential programmes, with the pattern, material and technical documentation a manufacturing partner needs.", collaborators: "" }
+const DEF = { showHero: true, handImage: "", handTipX: 6, handTipY: 94, handWidth: 46, heroCaption: "Motif study · ink and charcoal on paper", heroCopy: "Every surface here begins as a drawing. Ink first, to find the geometry; charcoal after, to find its weight. The line is worked by hand at the drafting table until it can hold a wall, a woven cloth, a plaster ground. What you see in the library is that drawing, carried to scale.", supabaseUrl: "https://afejhlfwymwagstyfnse.supabase.co", publishableKey: "sb_publishable_DxxomxoBSa8QkC6pBzYf5A_O86rctbV", heading: "Surface Library", intro: "Pattern and surface systems for walls, cloth, plaster, stone and hardware, with trade samples by appointment. Access and licensing are arranged directly with the studio.", requestHref: "/inquiry?vertical=surface-library", licensingTitle: "Licensing & collaboration", licensingCopy: "FELEMAYE Surface Studio develops original wallcoverings, woven textiles, plaster finishes, tile and stone, and architectural hardware for licensing and brand collaboration. Collections are designed for hospitality and residential programmes, with the pattern, material and technical documentation a manufacturing partner needs.", collaborators: "" }
 const APPS: [string, string][] = [["Wallcoverings", "Original pattern for paper, vinyl and woven grounds."], ["Woven Textiles", "Upholstery, drapery and rug-scale cloths."], ["Custom Plaster / Tadelakt", "Hand-troweled, burnished and waterproof lime finishes."], ["Tile & Stone", "Natural stone, cement and glazed tile."], ["Architectural Hardware", "Pulls, plates and fixtures in considered metals."]]
 const BG = "#0B0B0C", CARD = "#141416", LINE = "#222226", GOLD = "#D4A373", TEXT = "#EDE6D8", MUTED = "#A39B8B"
 const SANS = "Jost,Inter,system-ui,sans-serif", SERIF = "'Cormorant Garamond',Georgia,serif", MONO = "ui-monospace,'SF Mono',Menlo,monospace"
 const tone = (s: string) => { let h = 0; for (const c of s) h = (h * 31 + c.charCodeAt(0)) % 360; return `linear-gradient(135deg,hsl(${h},14%,26%),hsl(${(h + 30) % 360},12%,15%))` }
+
+/* ── Drawn hero: the motif draws itself line by line, ink then charcoal, with an optional photographed hand
+   (a transparent PNG of a hand holding a pen) that travels with the nib. Reduced-motion visitors see the finished drawing. ── */
+const PAPER = "#EFE8DA", INK = "#1F1C18", CHAR = "#5B5650", OCHRE = "#B8742A"
+type Stroke = { d: string; c: string; w: number; rough?: boolean }
+function motif(): Stroke[] {
+    const C = 300, out: Stroke[] = []
+    const dia = (r: number) => `M${C} ${C - r}L${C + r} ${C}L${C} ${C + r}L${C - r} ${C}Z`
+    out.push({ d: dia(150), c: INK, w: 1.6 }, { d: dia(112), c: INK, w: 1.2 }, { d: dia(74), c: OCHRE, w: 1.4 }, { d: dia(38), c: INK, w: 1.1 })
+    // rays from the outer corners
+    for (const [dx, dy] of [[0, -1], [1, 0], [0, 1], [-1, 0]]) out.push({ d: `M${C + dx * 150} ${C + dy * 150}L${C + dx * 232} ${C + dy * 232}`, c: INK, w: 1.1 })
+    // fans of fine lines off each outer edge
+    for (const [sx, sy] of [[1, -1], [1, 1], [-1, 1], [-1, -1]]) for (let i = 1; i <= 4; i++) { const t = i / 5, x = C + sx * 150 * t, y = C + sy * 150 * (1 - t); out.push({ d: `M${x} ${y}L${x + sx * 46} ${y + sy * 46}`, c: INK, w: 0.9 }) }
+    // crescents beyond each side
+    out.push({ d: `M${C - 64} ${C - 214}Q${C} ${C - 150} ${C + 64} ${C - 214}`, c: INK, w: 1.2 }, { d: `M${C + 214} ${C - 64}Q${C + 150} ${C} ${C + 214} ${C + 64}`, c: INK, w: 1.2 }, { d: `M${C - 64} ${C + 214}Q${C} ${C + 150} ${C + 64} ${C + 214}`, c: INK, w: 1.2 }, { d: `M${C - 214} ${C - 64}Q${C - 150} ${C} ${C - 214} ${C + 64}`, c: INK, w: 1.2 })
+    // eight-point star at the centre
+    out.push({ d: `M${C} ${C - 22}L${C} ${C + 22}M${C - 22} ${C}L${C + 22} ${C}M${C - 15} ${C - 15}L${C + 15} ${C + 15}M${C + 15} ${C - 15}L${C - 15} ${C + 15}`, c: OCHRE, w: 1 })
+    // charcoal pass: loose hatching inside the outer band
+    for (let i = 0; i < 9; i++) { const t = 0.16 + i * 0.08; out.push({ d: `M${C - 150 * (1 - t)} ${C - 150 * t}L${C - 112 * (1 - t) + 6} ${C - 112 * t - 6}`, c: CHAR, w: 2.4, rough: true }) }
+    for (let i = 0; i < 9; i++) { const t = 0.16 + i * 0.08; out.push({ d: `M${C + 150 * (1 - t)} ${C + 150 * t}L${C + 112 * (1 - t) - 6} ${C + 112 * t + 6}`, c: CHAR, w: 2.4, rough: true }) }
+    return out
+}
+function DrawnHero({ p }: { p: Props }) {
+    const strokes = React.useMemo(motif, [])
+    const box = React.useRef<HTMLDivElement>(null)
+    const refs = React.useRef<(SVGPathElement | null)[]>([])
+    const [nib, setNib] = React.useState<{ x: number; y: number } | null>(null)
+    const [done, setDone] = React.useState(false)
+    React.useEffect(() => {
+        const els = refs.current.filter(Boolean) as SVGPathElement[]
+        const lens = els.map((e) => e.getTotalLength())
+        const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+        if (still) { els.forEach((e) => { e.style.strokeDasharray = "none" }); setDone(true); return }
+        els.forEach((e, i) => { e.style.strokeDasharray = `${lens[i]}`; e.style.strokeDashoffset = `${lens[i]}` })
+        const total = lens.reduce((a, b) => a + b, 0)
+        const speed = 340 // svg units per second: slow enough to read as a hand
+        let raf = 0, t0 = 0, started = false
+        const tick = (now: number) => {
+            if (!t0) t0 = now
+            let left = ((now - t0) / 1000) * speed
+            for (let i = 0; i < els.length; i++) {
+                const L = lens[i], drawn = Math.max(0, Math.min(L, left))
+                els[i].style.strokeDashoffset = `${L - drawn}`
+                if (left > 0 && left < L) { const pt = els[i].getPointAtLength(drawn); setNib({ x: pt.x, y: pt.y }) }
+                left -= L + 18 // a short lift between strokes
+            }
+            if (((now - t0) / 1000) * speed < total + els.length * 18) raf = requestAnimationFrame(tick)
+            else { setNib(null); setDone(true) }
+        }
+        const io = new IntersectionObserver((en) => { if (!started && en.some((x) => x.isIntersecting)) { started = true; raf = requestAnimationFrame(tick) } }, { threshold: 0.35 })
+        box.current && io.observe(box.current)
+        return () => { io.disconnect(); cancelAnimationFrame(raf) }
+    }, [strokes])
+    const w = p.handWidth ?? 46
+    return (
+        <div className="sl-hero">
+            <div ref={box} className="sl-sheet" aria-label={p.heroCaption} role="img">
+                <svg viewBox="0 0 600 600" width="100%" style={{ display: "block" }} aria-hidden="true">
+                    <defs>
+                        <filter id="sl-paper"><feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="4" /><feColorMatrix values="0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .24  0 0 0 .09 0" /></filter>
+                        <filter id="sl-charcoal"><feTurbulence type="fractalNoise" baseFrequency="1.6" numOctaves="2" seed="9" result="n" /><feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" /></filter>
+                    </defs>
+                    <rect width="600" height="600" fill={PAPER} />
+                    <rect width="600" height="600" filter="url(#sl-paper)" />
+                    {strokes.map((s, i) => <path key={i} ref={(el) => (refs.current[i] = el)} d={s.d} fill="none" stroke={s.c} strokeWidth={s.w} strokeLinecap="round" strokeLinejoin="round" opacity={s.rough ? 0.55 : 0.92} filter={s.rough ? "url(#sl-charcoal)" : undefined} />)}
+                </svg>
+                {nib && !p.handImage && <span className="sl-nib" style={{ left: `${(nib.x / 600) * 100}%`, top: `${(nib.y / 600) * 100}%` }} />}
+                {p.handImage && (
+                    <img src={p.handImage} alt="" aria-hidden="true" className="sl-hand" style={{ width: `${w}%`, left: `${((nib?.x ?? 470) / 600) * 100}%`, top: `${((nib?.y ?? 470) / 600) * 100}%`, transform: `translate(-${p.handTipX ?? 6}%, -${p.handTipY ?? 94}%)`, opacity: done ? 0 : 1 }} />
+                )}
+                <div className="sl-cap">{p.heroCaption}</div>
+            </div>
+            <div className="sl-herotx">
+                <div style={{ font: `500 10px ${MONO}`, letterSpacing: ".28em", textTransform: "uppercase", color: GOLD }}>Surface Studio</div>
+                <h1 style={{ font: `400 clamp(38px,6vw,76px)/1.04 ${SERIF}`, margin: "14px 0 18px" }}>{p.heading}</h1>
+                <p style={{ font: `300 clamp(16px,1.5vw,19px)/1.75 ${SANS}`, color: "#D8D0C0", margin: 0, maxWidth: 520 }}>{p.heroCopy}</p>
+                <p style={{ font: `300 clamp(15px,1.4vw,17px)/1.7 ${SANS}`, color: MUTED, margin: "18px 0 0", maxWidth: 520 }}>{p.intro}</p>
+            </div>
+        </div>
+    )
+}
 
 function session(url: string) {
     try { const ref = new URL(url).hostname.split(".")[0]; const raw = localStorage.getItem(`sb-${ref}-auth-token`); if (!raw) return ""; const j = JSON.parse(raw); return j?.access_token || j?.currentSession?.access_token || "" } catch { return "" }
@@ -58,6 +139,12 @@ export default function SurfaceLibrary(props: Props) {
         <label className="sl-f"><span>{label}</span><select value={(f as any)[key]} onChange={(e) => setF({ ...f, [key]: e.target.value })}><option value="">All</option>{opts.map((o) => <option key={o} value={o}>{o}</option>)}</select></label>
     )
     const css = `.sl *{box-sizing:border-box}.sl .wrap{width:100%;max-width:80rem;margin:0 auto;padding:0 16px}@media(min-width:640px){.sl .wrap{padding:0 24px}}@media(min-width:768px){.sl .wrap{padding:0 48px}}@media(min-width:1024px){.sl .wrap{padding:0 64px}}
+.sl-hero{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:clamp(24px,5vw,72px);align-items:center;margin:0 0 clamp(40px,6vw,80px)}
+.sl-sheet{position:relative;overflow:hidden;box-shadow:0 1px 0 rgba(255,255,255,.04)}
+.sl-nib{position:absolute;width:5px;height:5px;margin:-2.5px 0 0 -2.5px;border-radius:50%;background:${INK};box-shadow:0 0 0 3px rgba(31,28,24,.12)}
+.sl-hand{position:absolute;pointer-events:none;transition:opacity .9s ease;will-change:left,top;filter:drop-shadow(0 18px 18px rgba(0,0,0,.18))}
+.sl-cap{position:absolute;left:18px;bottom:14px;font:italic 400 15px ${SERIF};color:#6E675D}
+@media(max-width:860px){.sl-hero{grid-template-columns:minmax(0,1fr)}}
 .sl-f{display:flex;flex-direction:column;gap:6px;font:500 10px ${MONO};letter-spacing:.2em;text-transform:uppercase;color:${GOLD};min-width:0}
 .sl-f select,.sl input[type=search]{background:${CARD};border:1px solid ${LINE};color:${TEXT};font:400 14px ${SANS};padding:12px;min-height:44px;width:100%;border-radius:0}
 .sl-f select:focus,.sl input:focus,.sl button:focus-visible{outline:1px solid ${GOLD}}
@@ -69,9 +156,10 @@ export default function SurfaceLibrary(props: Props) {
         <section className="sl" style={{ ...p.style, width: "100%", overflow: "hidden", boxSizing: "border-box", background: BG, color: TEXT, padding: "clamp(40px,7vw,96px) 0" }}>
             <style>{css}</style>
             <div className="wrap max-w-7xl mx-auto px-6 md:px-12 lg:px-16">
+                {p.showHero ? <DrawnHero p={p} /> : (<>
                 <div style={{ font: `500 10px ${MONO}`, letterSpacing: ".28em", textTransform: "uppercase", color: GOLD }}>Surface Studio</div>
                 <h1 style={{ font: `400 clamp(38px,6vw,76px)/1.04 ${SERIF}`, margin: "14px 0 12px" }}>{p.heading}</h1>
-                <p style={{ font: `300 clamp(15px,1.5vw,18px)/1.7 ${SANS}`, color: MUTED, maxWidth: 640, margin: "0 0 36px" }}>{p.intro}</p>
+                <p style={{ font: `300 clamp(15px,1.5vw,18px)/1.7 ${SANS}`, color: MUTED, maxWidth: 640, margin: "0 0 36px" }}>{p.intro}</p></>)}
                 <div className="apps">
                     {APPS.map(([a, d]) => { const on = f.app === a; return (
                         <button key={a} aria-pressed={on} onClick={() => setF({ ...f, app: on ? "" : a })} className="apptile" style={{ borderColor: on ? GOLD : LINE }}>
@@ -139,6 +227,13 @@ export default function SurfaceLibrary(props: Props) {
 }
 SurfaceLibrary.defaultProps = { ...DEF, width: 1200, height: 900 }
 addPropertyControls(SurfaceLibrary, {
+    showHero: { type: ControlType.Boolean, title: "Drawn hero", defaultValue: true },
+    handImage: { type: ControlType.Image, title: "Hand image", description: "Transparent PNG of a hand holding a pen or charcoal. It travels with the line as the motif draws." },
+    handTipX: { type: ControlType.Number, title: "Pen tip X %", min: 0, max: 100, defaultValue: 6, hidden: (p: any) => !p.handImage },
+    handTipY: { type: ControlType.Number, title: "Pen tip Y %", min: 0, max: 100, defaultValue: 94, hidden: (p: any) => !p.handImage },
+    handWidth: { type: ControlType.Number, title: "Hand size %", min: 20, max: 90, defaultValue: 46, hidden: (p: any) => !p.handImage },
+    heroCopy: { type: ControlType.String, title: "Hero copy", displayTextArea: true },
+    heroCaption: { type: ControlType.String, title: "Drawing caption" },
     supabaseUrl: { type: ControlType.String, title: "Supabase URL" },
     publishableKey: { type: ControlType.String, title: "Publishable key" },
     heading: { type: ControlType.String, title: "Heading" },

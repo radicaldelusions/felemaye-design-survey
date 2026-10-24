@@ -195,7 +195,7 @@ export default function ClientPortal(p: Props) {
     .fyp .mono{font-family:ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.14em;font-size:11.5px;line-height:1.5;text-transform:uppercase;opacity:.8}
     .fyp h1,.fyp h2,.fyp h3{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;margin:0;letter-spacing:.01em}
     .fyp button{font:inherit;cursor:pointer}
-    .fyp .wrap{max-width:1280px;margin:0 auto;padding:clamp(20px,5vw,72px)}
+    .fyp .wrap{max-width:1360px;margin:0 auto;padding:clamp(20px,5vw,72px)}
     .fyp .card{background:color-mix(in srgb,var(--surface) 60%,transparent);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border:1px solid color-mix(in srgb,var(--ink) 9%,transparent);padding:clamp(18px,3vw,32px);min-width:0}
     .fyp .btn{background:var(--accent);color:var(--btn-ink);border:0;padding:14px 22px;letter-spacing:.14em;font-size:12px;text-transform:uppercase}
     .fyp .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}.fyp .btn.ghost:hover{border-color:var(--accent);color:var(--accent)}
@@ -222,6 +222,19 @@ export default function ClientPortal(p: Props) {
     .fyp .actf button[aria-pressed=true]{background:var(--accent);color:var(--paper)}.fyp .actf button:focus-visible{outline:2px solid var(--accent)}
     .fyp .phbar{flex:1;height:6px;background:var(--line);position:relative;overflow:hidden}.fyp .phbar i{position:absolute;inset:0 auto 0 0;transition:width 1.1s cubic-bezier(.2,.7,.2,1)}
     .fyp .g2{grid-template-columns:1.4fr 1fr}
+    .fyp .gpair{grid-template-columns:minmax(0,1fr) minmax(0,1fr);align-items:stretch}
+    .fyp .schedgrid{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(0,1fr);gap:clamp(18px,3vw,40px);margin-top:16px;align-items:start}
+    .fyp .schedside{border-left:1px solid var(--line);padding-left:clamp(16px,2.4vw,32px)}
+    .fyp .schedside>div:first-child,.fyp .schedside>p:first-child{margin-top:0!important;padding-top:0!important;border-top:0!important}
+    .fyp .feat{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:clamp(16px,2.4vw,32px);align-items:start}
+    .fyp .featimg{background:color-mix(in srgb,var(--ink) 5%,transparent);display:flex;align-items:center;justify-content:center}
+    .fyp .feat:not(:has(.featimg)){grid-template-columns:1fr}
+    .fyp .notefull{margin-top:22px;padding-top:20px;border-top:1px solid var(--line)}
+    .fyp .jgal{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 6px}.fyp .jgal::after{content:"";flex:999 1 0px}
+    .fyp .prog{padding-top:clamp(14px,2vw,22px);padding-bottom:clamp(14px,2vw,22px)}
+    @media(max-width:1024px){.fyp .schedgrid,.fyp .feat{grid-template-columns:minmax(0,1fr)}.fyp .schedside{border-left:0;padding-left:0;border-top:1px solid var(--line);padding-top:18px}}
+    @media(max-width:860px){.fyp .gpair{grid-template-columns:minmax(0,1fr)}.fyp .actsub{padding-left:0!important}}
+    @media(max-width:520px){.fyp .grid.g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .grid.g4>.snd{grid-column:1/-1}}
     @media(max-width:1024px){.fyp .g4{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .snd{grid-column:span 2}}@media(max-width:860px){.fyp .g3,.fyp .g2,.fyp .gh{grid-template-columns:1fr}}@media(max-width:520px){.fyp .g4{grid-template-columns:minmax(0,1fr)}.fyp .snd{grid-column:auto}.fyp .actrow{grid-template-columns:auto minmax(0,1fr);row-gap:4px}.fyp .actrow .ts{grid-column:1}.fyp .actrow .sd{grid-column:2;text-align:right}.fyp .actrow .tx{grid-column:1/-1}}@media(max-width:700px){.fyp .navgrid .row5{grid-template-columns:repeat(2,minmax(0,1fr))}.fyp .navgrid .row5>.nv:last-child:nth-child(5n+1){grid-column:auto}.fyp .navgrid .row5>.nv:last-child:nth-child(odd){grid-column:1/-1}.fyp .nv{letter-spacing:.12em;font-size:11px;min-height:56px}}
     .fyp img,.fyp iframe{max-width:100%}
     .fyp a{color:var(--accent)}.fyp a.btn{color:var(--btn-ink)}.fyp a.btn.ghost{color:var(--ink)}
@@ -519,6 +532,7 @@ function Home({ p, project, db, go }: any) {
     const pending = pendingD + taskOpen + ph.rows.filter((r: any) => r.status === "in_review").length
     const approved = ph.rows.filter((r: any) => r.status === "approved").length
     const notion = p.notionUrl || LINKS.notion
+    const cad = useCadence(db, project?.id)
     return (
       <div className="grid">
         <div className="grid g4">
@@ -541,9 +555,7 @@ function Home({ p, project, db, go }: any) {
                     ) : <p style={{ opacity: 0.6, fontSize: 13 }}>{project?.music_note || "A playlist curated for your project will appear here."}</p>}
                 </div>
         </div>
-        <div className="grid gh">
-            <div className="grid">
-                <div className="card">
+        <div className="card prog">
                     <div className="row" style={{ justifyContent: "space-between", flexWrap: "nowrap" }}><div className="mono">Progress</div><div style={{ fontFamily: "'Cormorant Garamond',Georgia,serif", fontSize: 30, color: "var(--accent)" }}>{overall}% complete</div></div>
                     <div style={{ display: "flex", gap: 6, marginTop: 14 }} role="img" aria-label={`${overall}% complete${current ? `, phase ${current.seq} ${curPct}% done` : ""}`}>
                         {ph.rows.map((r: any) => {
@@ -559,36 +571,12 @@ function Home({ p, project, db, go }: any) {
                     {current && <div className="mono" style={{ marginTop: 12, opacity: 0.85 }}>Phase {current.seq} · {current.title} — {curPct}% complete</div>}
                     <p style={{ opacity: 0.7, fontSize: 14, lineHeight: 1.7 }}>{current?.summary || "Your first phase opens as soon as your survey is filed."}</p>
                 </div>
-                <ClientTasks project={project} db={db} studio={studioH} go={go} />
-            </div>
-            <div className="grid">
-                <ScheduleHub p={p} project={project} db={db} go={go} />
-            </div>
+        <ScheduleHub p={p} project={project} db={db} go={go} c={cad} part="main" />
+        <div className="grid gpair">
+            <ClientTasks project={project} db={db} studio={studioH} go={go} />
+            <ScheduleHub p={p} project={project} db={db} go={go} c={cad} part="book" />
         </div>
-        <div className="card">
-            <div className="row" style={{ justifyContent: "space-between", marginBottom: 6 }}>
-                <div className="mono">Recent activity · studio &amp; client</div>
-                <div className="actf" role="group" aria-label="Filter activity">
-                    {(["all", "studio", "client"] as const).map((k) => <button key={k} aria-pressed={actSide === k} onClick={() => setActSide(k)}>{k}</button>)}
-                </div>
-            </div>
-            {act.rows.filter((a: any) => actSide === "all" || sideOf(a) === actSide).slice(-10).reverse().map((a: any) => {
-                const d = new Date(a.created_at)
-                const stamp = `${String(d.getMonth() + 1).padStart(2, "0")}/${String(d.getDate()).padStart(2, "0")}/${d.getFullYear()} ${d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}`
-                const sd = sideOf(a)
-                const what = String(a.action).replace(/_/g, " ")
-                const detail = a.meta?.title || a.meta?.name || a.meta?.firm || ""
-                return (
-                    <div key={a.id} className="actrow">
-                        <span className="ts">{stamp}</span>
-                        <span className="sd" data-s={sd}>{sd}</span>
-                        <span className="tx">{what.charAt(0).toUpperCase() + what.slice(1)}{detail ? <span style={{ opacity: 0.7 }}> · {detail}</span> : null}</span>
-                    </div>
-                )
-            })}
-            {!act.rows.length && <p style={{ opacity: 0.6, fontSize: 13 }}>Nothing yet.</p>}
-        </div>
-        <Upcoming project={project} db={db} go={go} />
+        <ActivityCard act={act} sideOf={sideOf} actSide={actSide} setActSide={setActSide} />
         <div className="card">
             <div className="mono">Behind the scenes</div>
             <h2 style={{ fontSize: 28, margin: "8px 0 6px" }}>Curious where things stand?</h2>
@@ -620,6 +608,62 @@ function Home({ p, project, db, go }: any) {
             )}
         </div>
       </div>
+    )
+}
+
+/* Recent activity: runs of the same action by the same person on the same day fold into one line. Nothing is deleted. */
+function groupActivity(rows: any[], keyOf: (a: any) => string) {
+    const out: any[] = []
+    for (const a of rows) {
+        const k = keyOf(a) + "|" + new Date(a.created_at).toDateString()
+        const last = out[out.length - 1]
+        if (last && last.k === k) last.items.push(a)
+        else out.push({ k, head: a, items: [a] })
+    }
+    return out
+}
+const PLURAL: Record<string, string> = { file_uploaded: "files uploaded", file_from_client: "files uploaded", phase_request_changes: "change requests", friday_update_posted: "Friday notes posted" }
+function ActivityCard({ act, sideOf, actSide, setActSide }: any) {
+    const [open, setOpen] = React.useState(true)
+    const [shown, setShown] = React.useState(6)
+    const [exp, setExp] = React.useState<Record<string, boolean>>({})
+    const rows = act.rows.filter((a: any) => actSide === "all" || sideOf(a) === actSide).slice().reverse()
+    const groups = groupActivity(rows, (a) => `${a.action}|${a.actor || ""}|${sideOf(a)}`)
+    const stamp = (t: string) => { const d = new Date(t); return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} · ${d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}` }
+    const label = (a: any) => { const w = String(a.action).replace(/_/g, " "); return w.charAt(0).toUpperCase() + w.slice(1) }
+    const detail = (a: any) => a.meta?.title || a.meta?.name || a.meta?.firm || ""
+    return (
+        <div className="card">
+            <div className="row" style={{ justifyContent: "space-between" }}>
+                <button onClick={() => setOpen(!open)} aria-expanded={open} style={{ all: "unset", cursor: "pointer", display: "flex", gap: 10, alignItems: "baseline" }}>
+                    <span className="mono">Recent activity</span>
+                    <span className="mono" style={{ opacity: 0.55 }}>{rows.length ? `${rows.length} entries · ` : ""}{open ? "Collapse" : "Expand"}</span>
+                </button>
+                {open && <div className="actf" role="group" aria-label="Filter activity">
+                    {(["all", "studio", "client"] as const).map((k) => <button key={k} aria-pressed={actSide === k} onClick={() => { setActSide(k); setShown(6) }}>{k}</button>)}
+                </div>}
+            </div>
+            {open && <div style={{ marginTop: 8 }}>
+                {groups.slice(0, shown).map((g: any) => {
+                    const sd = sideOf(g.head), many = g.items.length > 1
+                    return (
+                        <div key={g.head.id}>
+                            <div className="actrow">
+                                <span className="ts">{stamp(g.head.created_at)}</span>
+                                <span className="sd" data-s={sd}>{sd}</span>
+                                <span className="tx">
+                                    {many ? <>{g.items.length} {PLURAL[g.head.action] || label(g.head).toLowerCase()}</> : <>{label(g.head)}{detail(g.head) ? <span style={{ opacity: 0.7 }}> · {detail(g.head)}</span> : null}</>}
+                                    {many && <a className="mono" onClick={() => setExp({ ...exp, [g.head.id]: !exp[g.head.id] })} aria-expanded={!!exp[g.head.id]} style={{ marginLeft: 10, cursor: "pointer", textDecoration: "underline", fontSize: 10.5 }}>{exp[g.head.id] ? "Hide" : "Show"}</a>}
+                                </span>
+                            </div>
+                            {many && exp[g.head.id] && <div style={{ padding: "2px 0 10px 216px" }} className="actsub">{g.items.map((a: any) => <div key={a.id} style={{ fontSize: 13, padding: "3px 0", opacity: 0.8 }} className="brk">{detail(a) || label(a)}</div>)}</div>}
+                        </div>
+                    )
+                })}
+                {groups.length > shown && <button className="btn ghost" style={{ marginTop: 12 }} onClick={() => setShown(shown + 10)}>Show earlier activity</button>}
+                {!rows.length && <p style={{ opacity: 0.6, fontSize: 13 }}>Nothing yet.</p>}
+            </div>}
+        </div>
     )
 }
 
@@ -1906,7 +1950,7 @@ function Adjacencies({ adj }: any) {
 }
 
 const icsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "")
-function Upcoming({ project, db, go }: any) {
+function Upcoming({ project, db, go, compact }: any) {
     const [ev, setEv] = React.useState<any[]>([])
     React.useEffect(() => {
         if (!project?.id) return
@@ -1918,6 +1962,21 @@ function Upcoming({ project, db, go }: any) {
         const body = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//FELEMAYE//Portal//EN", "BEGIN:VEVENT", `UID:${e.id}@felemaye.com`, `DTSTAMP:${icsDate(new Date())}`, `DTSTART:${icsDate(s)}`, `DTEND:${icsDate(en)}`, `SUMMARY:${e.title}`, `LOCATION:${e.location || e.video_url || ""}`, `DESCRIPTION:${(e.notes || "").replace(/\n/g, "\\n")}`, "END:VEVENT", "END:VCALENDAR"].join("\r\n")
         const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([body], { type: "text/calendar" })); a.download = "felemaye-session.ics"; a.click()
     }
+    if (compact) return (
+        <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
+            <div className="mono">On the calendar</div>
+            {ev.slice(0, 3).map((e) => {
+                const d = new Date(e.starts_at)
+                return (
+                    <div key={e.id} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) auto", gap: 12, padding: "10px 0", borderTop: LINE, alignItems: "baseline" }}>
+                        <div className="brk" style={{ fontSize: 15 }}>{e.title}<div className="mono" style={{ marginTop: 3, fontSize: 10.5 }}>{d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })} · {d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div></div>
+                        <span className="row" style={{ gap: 10, flexWrap: "nowrap" }}>{e.video_url && <a className="mono" href={e.video_url} target="_blank" rel="noopener" style={{ textDecoration: "underline" }}>Join</a>}<a className="mono" href={gcal(e)} target="_blank" rel="noopener" style={{ textDecoration: "underline" }}>Calendar</a></span>
+                    </div>
+                )
+            })}
+            {!ev.length && <p style={{ margin: "6px 0 0", opacity: 0.65, fontSize: 14 }}>Nothing on the calendar yet.</p>}
+        </div>
+    )
     return (
         <div className="card">
             <div className="mono">UPCOMING APPOINTMENTS</div>
@@ -2496,8 +2555,7 @@ function AgendaView({ a, ev, week, onClose }: any) {
 }
 
 /* ── 4 · Schedule & Meetings (Home) ── */
-function ScheduleHub({ p, project, db, go }: any) {
-    const c = useCadence(db, project?.id)
+function ScheduleHub({ p, project, db, go, c, part = "main" }: any) {
     const [agenda, setAgenda] = React.useState<any>(null)
     const [book, setBook] = React.useState(false)
     const bookingUrl = project?.permit_progress?.__booking_url || ""
@@ -2511,14 +2569,49 @@ function ScheduleHub({ p, project, db, go }: any) {
     const agendaFor = (ev: any) => c.agendas.find((a: any) => a.event_id === ev?.id) || null
     const days = nextEv ? Math.ceil((new Date(nextEv.starts_at).getTime() - now) / 864e5) : null
     const fri = (() => { const d = new Date(); d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7)); return d })()
-    if (!c.ready) return <div className="card cad"><div className="mono">4 · Schedule & meetings</div><p style={{ opacity: 0.6, fontSize: 15 }}>Loading your schedule…</p></div>
-    return (
+    if (!c.ready) return <div className="card cad"><div className="mono">{part === "book" ? "Book time with Felema" : "Schedule & updates"}</div><p style={{ opacity: 0.6, fontSize: 15 }}>Loading…</p></div>
+    if (part === "book") return (
         <div className="card cad">
             <style>{CAD_CSS}</style>
+            <div className="mono">Book time with Felema</div>
+            <p style={{ fontSize: 15, lineHeight: 1.7, opacity: 0.75, margin: "8px 0 12px" }}>{c.cfg?.booking_note || "Milestone reviews are included in your scope. Additional consultations are billed at the studio's hourly advisory rate."}{c.cfg?.advisory_rate ? ` Current advisory rate: $${Math.round(+c.cfg.advisory_rate)} per hour.` : ""}</p>
+            {bookingUrl ? (
+                <>
+                    <div className="row" style={{ gap: 10 }}>
+                        <button className="btn" onClick={() => setBook(!book)} aria-expanded={book}>{book ? "Hide calendar" : "Book a phase review"}</button>
+                        <a className="btn ghost" href={bookingUrl} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Open in a new tab ↗</a>
+                    </div>
+                    {book && <iframe title="Book a phase review" src={bookingUrl + (bookingUrl.includes("?") ? "&" : "?") + "embed=true&hide_gdpr_banner=1"} style={{ width: "100%", height: 680, border: LINE, marginTop: 14, background: "#fff" }} loading="lazy" />}
+                    <a className="mono" onClick={() => go("meet")} style={{ display: "inline-block", marginTop: 12, textDecoration: "underline", cursor: "pointer" }}>Prefer to suggest times? Request a meeting →</a>
+                </>
+            ) : <Meet project={project} db={db} compact />}
+            <Upcoming project={project} db={db} go={go} compact />
+        </div>
+    )
+    const note = latest ? (
+        <div className="feat">
+            {(latest.images || [])[0] && <div className="featimg"><SlideThumb db={db} s={latest.images[0]} fit="contain" /></div>}
+            <div className="feattx">
+                <div className="mono">Friday progress note{latest.week_no ? ` · Week ${latest.week_no}` : ""} · {fmtD(new Date(latest.published_at), { month: "long", day: "numeric" })}</div>
+                <h2 className="brk" style={{ fontSize: "clamp(26px,3vw,36px)", lineHeight: 1.12, margin: "10px 0 0" }}>{latest.title}</h2>
+                {latest.body && <p style={{ whiteSpace: "pre-wrap", fontSize: 15.5, lineHeight: 1.75, opacity: 0.82, margin: "12px 0 0", ...(fullNote ? {} : { display: "-webkit-box", WebkitLineClamp: 6, WebkitBoxOrient: "vertical", overflow: "hidden" }) }}>{latest.body}</p>}
+                <div className="row" style={{ gap: 12, marginTop: 16 }}>
+                    <button className="btn" onClick={() => setFullNote(!fullNote)} aria-expanded={fullNote}>{fullNote ? "Close the note" : "Read the full note"}</button>
+                    <a className="mono" onClick={() => go("roadmap")} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>All updates →</a>
+                </div>
+            </div>
+        </div>
+    ) : <p style={{ fontSize: 15, opacity: 0.75, margin: "8px 0 0" }}>Your first progress note arrives on {fmtD(fri, { weekday: "long", month: "long", day: "numeric" })}.</p>
+    return (
+        <div className="card cad sched">
+            <style>{CAD_CSS}</style>
             <div className="row" style={{ justifyContent: "space-between" }}>
-                <div className="mono">4 · Schedule & meetings</div>
+                <div className="mono">Schedule &amp; updates</div>
                 {week > 0 && c.cfg && <span className="mono" style={{ color: "var(--accent)", opacity: 1 }}>Week {Math.min(week, c.cfg.weeks)} of {c.cfg.weeks}</span>}
             </div>
+            <div className="schedgrid">
+            <div className="schednote">{note}</div>
+            <div className="schedside">
             {nextEv ? (
                 <div style={{ marginTop: 14 }}>
                     <div className="mono">Next session{days != null && days >= 0 ? ` · ${days === 0 ? "today" : days === 1 ? "tomorrow" : `in ${days} days`}` : ""}</div>
@@ -2539,43 +2632,12 @@ function ScheduleHub({ p, project, db, go }: any) {
                 </div>
             ) : null}
 
-            <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
-                <div className="row" style={{ justifyContent: "space-between" }}>
-                    <div className="mono">Friday progress note</div>
-                    {!latest || new Date(latest.published_at).getTime() < now - 6 * 864e5 ? <span className="mono" style={{ fontSize: 9 }}>Next · {fmtD(fri, { weekday: "long", month: "short", day: "numeric" })}</span> : null}
-                </div>
-                {latest ? (
-                    <div style={{ marginTop: 8 }}>
-                        {(latest.images || [])[0] && <div style={{ aspectRatio: "16/9", overflow: "hidden", margin: "6px 0 10px", background: "color-mix(in srgb,var(--ink) 6%,transparent)" }}><SlideThumb db={db} s={latest.images[0]} /></div>}
-                        <div style={{ fontSize: 18 }} className="brk">{latest.title}</div>
-                        {latest.body && !fullNote && <p style={{ fontSize: 15.5, lineHeight: 1.7, opacity: 0.8, margin: "6px 0 0", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>{latest.body}</p>}
-                        <div className="row" style={{ gap: 14, marginTop: 8 }}>
-                            <a className="mono" onClick={() => setFullNote(!fullNote)} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>{fullNote ? "Close the note" : "Read the full note"}</a>
-                            <a className="mono" onClick={() => go("roadmap")} style={{ textDecoration: "underline", cursor: "pointer", padding: "6px 0" }}>All updates →</a>
-                        </div>
-                        {fullNote && <div style={{ marginTop: 8 }}><NoteDetail db={db} u={latest} project={project} /></div>}
-                    </div>
-                ) : <p style={{ fontSize: 15, opacity: 0.75, margin: "8px 0 0" }}>Your first progress note arrives on {fmtD(fri, { weekday: "long", month: "long", day: "numeric" })}.</p>}
-            </div>
-
             {W && W.touchpoint !== "live" && <p style={{ fontSize: 15, opacity: 0.7, margin: "16px 0 0", lineHeight: 1.6 }}><span className="mono" style={{ display: "block", marginBottom: 4 }}>This week in the studio</span>{W.title}</p>}
 
             <StandingSlot db={db} project={project} cfg={c.cfg} reload={c.reload} />
-
-            <div style={{ marginTop: 22, paddingTop: 16, borderTop: LINE }}>
-                <div className="mono">Book time with Felema</div>
-                <p style={{ fontSize: 15, lineHeight: 1.7, opacity: 0.75, margin: "6px 0 10px" }}>{c.cfg?.booking_note || "Milestone reviews are included in your scope. Additional consultations are billed at the studio's hourly advisory rate."}{c.cfg?.advisory_rate ? ` Current advisory rate: $${Math.round(+c.cfg.advisory_rate)} per hour.` : ""}</p>
-                {bookingUrl ? (
-                    <>
-                        <div className="row" style={{ gap: 10 }}>
-                            <button className="btn" onClick={() => setBook(!book)} aria-expanded={book}>{book ? "Hide calendar" : "Book a phase review"}</button>
-                            <a className="btn ghost" href={bookingUrl} target="_blank" rel="noopener" style={{ textDecoration: "none" }}>Open in a new tab ↗</a>
-                        </div>
-                        {book && <iframe title="Book a phase review" src={bookingUrl + (bookingUrl.includes("?") ? "&" : "?") + "embed=true&hide_gdpr_banner=1"} style={{ width: "100%", height: 680, border: LINE, marginTop: 14, background: "#fff" }} loading="lazy" />}
-                    </>
-                ) : <Meet project={project} db={db} compact />}
-                {bookingUrl && <a className="mono" onClick={() => go("meet")} style={{ display: "inline-block", marginTop: 12, textDecoration: "underline", cursor: "pointer" }}>Prefer to suggest times? Request a meeting →</a>}
             </div>
+            </div>
+            {fullNote && latest && <div className="notefull"><NoteDetail db={db} u={latest} project={project} skipCover skipBody /></div>}
             {agenda && <AgendaView a={agenda.a} ev={agenda.ev} week={agenda.week} onClose={() => setAgenda(null)} />}
         </div>
     )
@@ -2888,7 +2950,7 @@ ${o.autoPrint === false ? "" : "setTimeout(()=>print(),300)"}})()
 }
 
 /** Friday note, full view in the portal: images, itemized dates and requests, and the same two-page PDF the studio prints. */
-function NoteDetail({ db, u, project }: any) {
+function NoteDetail({ db, u, project, skipCover, skipBody }: any) {
     const [busy, setBusy] = React.useState(false)
     const next = (u.next_items || []).filter((x: any) => x?.item)
     const asks = (u.asks_items || []).filter((x: any) => x?.item)
@@ -2904,8 +2966,8 @@ function NoteDetail({ db, u, project }: any) {
     }
     return (
         <div>
-            {(u.images || []).length > 0 && <NoteImages db={db} imgs={u.images} />}
-            {u.body && <p style={{ whiteSpace: "pre-wrap", fontSize: 15.5, lineHeight: 1.7, opacity: 0.85, margin: "6px 0 0" }}>{u.body}</p>}
+            {(u.images || []).slice(skipCover ? 1 : 0).length > 0 && <NoteImages db={db} imgs={(u.images || []).slice(skipCover ? 1 : 0)} />}
+            {u.body && !skipBody && <p style={{ whiteSpace: "pre-wrap", fontSize: 15.5, lineHeight: 1.7, opacity: 0.85, margin: "6px 0 0" }}>{u.body}</p>}
             {(u.highlights || []).length > 0 && <><div className="mono" style={{ marginTop: 14 }}>This week in the studio</div><ul style={{ margin: "6px 0 0", paddingLeft: 18, fontSize: 15, lineHeight: 1.7 }}>{u.highlights.map((h: string) => <li key={h}>{h}</li>)}</ul></>}
             {next.length > 0 && <><div className="mono" style={{ marginTop: 14 }}>Coming up</div>
                 <div style={{ marginTop: 6 }}>{next.map((x: any, i: number) => <div key={i} style={{ display: "grid", gridTemplateColumns: "110px minmax(0,1fr) auto", gap: 12, padding: "9px 0", borderTop: LINE, fontSize: 15, alignItems: "baseline" }}><span className="mono" style={{ color: "var(--accent)", opacity: 1 }}>{x.date ? d(x.date) : "—"}</span><span className="brk">{x.item}</span><span className="mono">{x.who === "you" ? "You" : x.who === "both" ? "Together" : "Studio"}</span></div>)}</div></>}
@@ -2922,21 +2984,32 @@ function NoteDetail({ db, u, project }: any) {
     )
 }
 
+// Justified rows: each image keeps its own proportions (never cropped); rows share one height.
 function NoteImages({ db, imgs }: any) {
+    const [ar, setAr] = React.useState<Record<string, number>>({})
     return (
-        <div style={{ display: "grid", gridTemplateColumns: imgs.length === 1 ? "1fr" : "repeat(auto-fit,minmax(200px,1fr))", gap: 10, margin: "10px 0 4px" }}>
-            {imgs.slice(0, 7).map((x: any) => (
-                <figure key={x.path} style={{ margin: 0 }}>
-                    <div style={{ aspectRatio: "4/3", overflow: "hidden", background: "color-mix(in srgb,var(--ink) 6%,transparent)" }}><SlideThumb db={db} s={x} /></div>
-                    {x.caption && <figcaption style={{ fontSize: 13, opacity: 0.7, marginTop: 6, lineHeight: 1.45 }}>{x.caption}</figcaption>}
-                </figure>
-            ))}
+        <div className="jgal">
+            {imgs.slice(0, 7).map((x: any) => {
+                const k = x.path || x.url
+                const a = ar[k] || 1.5
+                return (
+                    <figure key={k} style={{ margin: 0, minWidth: 0, flex: `${a} 1 ${Math.round(a * 240)}px` }}>
+                        <SlideThumb db={db} s={x} fit="natural" onAr={(v: number) => setAr((m) => (m[k] === v ? m : { ...m, [k]: v }))} />
+                        {x.caption && <figcaption style={{ fontSize: 13, opacity: 0.7, marginTop: 6, lineHeight: 1.45 }}>{x.caption}</figcaption>}
+                    </figure>
+                )
+            })}
         </div>
     )
 }
-function SlideThumb({ db, s }: any) {
+
+function SlideThumb({ db, s, fit = "cover", onAr }: any) {
     const url = useResolved(db, s.url || (s.path ? "sb:" + s.path : ""))
-    return url ? <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} /> : null
+    if (!url) return null
+    const load = (e: any) => { const t = e.currentTarget; if (onAr && t.naturalWidth && t.naturalHeight) onAr(Math.round((t.naturalWidth / t.naturalHeight) * 1000) / 1000) }
+    if (fit === "natural") return <img src={url} alt={s.caption || ""} onLoad={load} style={{ width: "100%", height: "auto", display: "block" }} />
+    if (fit === "contain") return <img src={url} alt={s.caption || ""} onLoad={load} style={{ width: "100%", height: "auto", maxHeight: 560, objectFit: "contain", display: "block", margin: "0 auto" }} />
+    return <img src={url} alt="" style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }} />
 }
 
 ClientPortal.defaultProps = {

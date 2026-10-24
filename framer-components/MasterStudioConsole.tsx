@@ -674,6 +674,8 @@ const EVENT_LABELS: Record<string, string> = {
     ffe_declined: "declined an FF&E item",
     retainer_paid: "paid the retainer",
     portal_login: "signed in to the portal",
+    friday_update_posted: "received a Friday progress note",
+    survey_completed: "completed the Design Intent Survey",
 }
 const eventText = (a: string) => EVENT_LABELS[a] || String(a || "").replace(/_/g, " ")
 const fmtWhen = (t: string) => {
@@ -702,12 +704,14 @@ function MasterLog({ db, focus, setFocus, onNewClient, openTab }: any) {
     const [d, setD] = React.useState<any>({ ov: [], act: [], pr: [], ph: [], ffe: [], dl: [], mr: [] })
     const [seen, setSeenState] = React.useState<Record<string, string>>(readSeen)
     const [open, setOpen] = React.useState(false)
+    const [streamN, setStreamN] = React.useState(12)
+    const [streamOpen, setStreamOpen] = React.useState<Record<string, boolean>>({})
     const [toast, setToast] = React.useState("")
     const lastTop = React.useRef<string>("")
     const load = React.useCallback(async () => {
         const [ov, act, pr, ph, ffe, dl, mr] = await Promise.all([
             db.from("studio_overview").select("*").order("created_at", { ascending: false }),
-            db.from("project_activity").select("*").order("created_at", { ascending: false }).limit(60),
+            db.from("project_activity").select("*").order("created_at", { ascending: false }).limit(300),
             db.from("projects").select("id,title,client_id,jurisdiction_id,permit_progress"),
             db.from("phases").select("project_id,seq,title,status"),
             db.from("procurement_ffe").select("project_id,client_status"),
@@ -882,29 +886,47 @@ function MasterLog({ db, focus, setFocus, onNewClient, openTab }: any) {
                                 Mark all read
                             </button>
                         </div>
-                        {events.slice(0, 25).map((a: any) => {
-                            const isNew = !seen[a.project_id] || a.created_at > seen[a.project_id]
-                            return (
-                                <div
-                                    key={a.id}
-                                    style={{
-                                        display: "grid",
-                                        gridTemplateColumns: "110px 1fr",
-                                        gap: 12,
-                                        padding: "7px 0",
-                                        borderTop: ".5px solid color-mix(in srgb,var(--ink) 20%,transparent)",
-                                        fontSize: 13,
-                                        fontWeight: isNew ? 600 : 400,
-                                    }}
-                                >
-                                    <span className="mono">{fmtWhen(a.created_at)}</span>
-                                    <span>
-                                        {nameFor(a.project_id)} {eventText(a.action)}
-                                        {isNew ? <span className="badge" style={{ marginLeft: 8 }}>new</span> : null}
-                                    </span>
-                                </div>
-                            )
-                        })}
+                        {(() => {
+                            // Runs of the same event by the same client on the same day fold into one line; every row is still kept.
+                            const groups: any[] = []
+                            for (const a of events) {
+                                const k = `${a.project_id}|${a.action}|${a.actor || ""}|${new Date(a.created_at).toDateString()}`
+                                const last = groups[groups.length - 1]
+                                if (last && last.k === k) last.items.push(a)
+                                else groups.push({ k, head: a, items: [a] })
+                            }
+                            return groups.slice(0, streamN).map((g: any) => {
+                                const a = g.head
+                                const many = g.items.length > 1
+                                const isNew = g.items.some((x: any) => !seen[x.project_id] || x.created_at > seen[x.project_id])
+                                const what = many ? `${eventText(a.action).replace(/^uploaded a file$/, "uploaded").replace(/ an? /, " ")} ${g.items.length}${/upload/.test(a.action) ? " files" : "×"}` : eventText(a.action)
+                                return (
+                                    <div key={a.id} style={{ borderTop: ".5px solid color-mix(in srgb,var(--ink) 20%,transparent)", padding: "7px 0" }}>
+                                        <div style={{ display: "grid", gridTemplateColumns: "110px 1fr", gap: 12, fontSize: 13, fontWeight: isNew ? 600 : 400 }}>
+                                            <span className="mono">{fmtWhen(a.created_at)}</span>
+                                            <span>
+                                                {nameFor(a.project_id)} {what}
+                                                {many && (
+                                                    <button className="b g" style={{ marginLeft: 8, padding: "2px 8px", fontSize: 10 }} aria-expanded={!!streamOpen[a.id]} onClick={() => setStreamOpen({ ...streamOpen, [a.id]: !streamOpen[a.id] })}>
+                                                        {streamOpen[a.id] ? "Hide" : "Show"}
+                                                    </button>
+                                                )}
+                                                {isNew ? <span className="badge" style={{ marginLeft: 8 }}>new</span> : null}
+                                            </span>
+                                        </div>
+                                        {many && streamOpen[a.id] && (
+                                            <div style={{ padding: "4px 0 2px 122px", fontSize: 12.5, opacity: 0.8 }}>
+                                                {g.items.map((x: any) => (
+                                                    <div key={x.id} style={{ padding: "2px 0", overflowWrap: "anywhere" }}>
+                                                        {x.meta?.name || x.meta?.title || eventText(x.action)} <span className="mono" style={{ marginLeft: 6 }}>{new Date(x.created_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            }).concat(groups.length > streamN ? [<button key="more" className="b g" style={{ marginTop: 10 }} onClick={() => setStreamN(streamN + 15)}>Show earlier events ({groups.length - streamN})</button>] : [])
+                        })()}
                         {!events.length && <p className="mono">No client events yet.</p>}
                     </div>
                 )}
