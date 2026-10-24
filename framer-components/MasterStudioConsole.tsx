@@ -5936,36 +5936,154 @@ async function signAll(db: any, paths: string[]) {
     await Promise.all(paths.map(async (p) => { const { data } = await db.storage.from("project-files").createSignedUrl(p, 3600); out[p] = data?.signedUrl || "" }))
     return out
 }
-function fridayNoteHtml(project: any, u: any, urls: Record<string, string>, nextReview?: string) {
+/* ── Friday progress note · print template (2 pages, letter). Shared by the console and the client portal. ── */
+const FN_LOGO = "data:image/png;base64,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"
+const FN_C = { paper: "#F4EFE4", ink: "#2B2B28", accent: "#8C6F52", line: "#D9CFBD", soft: "#6E675C", tint: "#EAE2D3" }
+const fnEsc = (v: any) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" } as any)[c])
+const fnDate = (d: string, o: any = { weekday: "short", month: "short", day: "numeric" }) => { if (!d) return ""; const x = new Date(/^\d{4}-\d{2}-\d{2}$/.test(d) ? d + "T12:00:00" : d); return isNaN(x.getTime()) ? fnEsc(d) : x.toLocaleDateString("en-US", o) }
+function fridayNoteDoc(project: any, u: any, urls: Record<string, string>, o: any = {}) {
     const imgs = (u.images || []).filter((x: any) => urls[x.path])
-    const grid = imgs.length === 1 ? "grid-template-columns:1fr;height:4.1in" : imgs.length === 2 ? "grid-template-columns:1fr 1fr;height:3.1in" : "grid-template-columns:1.6fr 1fr;grid-template-rows:1fr 1fr;height:3.9in"
-    const fig = (x: any, i: number) => `<figure style="${imgs.length >= 3 && i === 0 ? "grid-row:span 2" : ""};min-height:0;display:flex;flex-direction:column"><div style="flex:1;min-height:0"><img src="${urls[x.path]}" alt=""></div>${x.caption ? `<figcaption>${escH(x.caption)}</figcaption>` : ""}</figure>`
-    const date = new Date(u.published_at || Date.now()).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })
-    return PRINT_HEAD(`Friday Progress Note · ${u.title}`) + `<section class="pg">
-<div class="hd"><span class="wm">FELEMAYE</span><span class="mono">Friday Progress Note${u.week_no ? ` · Week ${String(u.week_no).padStart(2, "0")}` : ""}</span></div>
-<div class="mono" style="margin-top:.22in">${escH(project?.title)} · ${escH(project?.address)}</div>
-<h1>${escH(u.title)}</h1><div class="mono">${escH(date)}</div>
-${u.body ? `<div class="rule"></div><p class="lead">${escH(u.body).replace(/\n/g, "<br>")}</p>` : ""}
-${imgs.length ? `<div class="imgs" style="${grid}">${imgs.slice(0, 3).map(fig).join("")}</div>` : ""}
-<div class="two" style="margin-top:.1in">
- <div>${(u.highlights || []).length ? `<h3>This week in the studio</h3><ul class="dash">${u.highlights.map((h: string) => `<li>${escH(h)}</li>`).join("")}</ul>` : ""}</div>
- <div>${u.next_up ? `<h3>Next</h3><p style="margin:0">${escH(u.next_up)}</p>` : ""}${nextReview ? `<h3>Your next review</h3><p style="margin:0">${escH(nextReview)}</p>` : ""}${u.asks ? `<h3>From you</h3><p style="margin:0">${escH(u.asks)}</p>` : ""}</div>
+    const hero = imgs[0], rest = imgs.slice(1, 7)
+    const ct = { email: "felema@felemaye.com", phone: "", web: "felemaye.com", ...(o.contact || {}) }
+    const date = fnDate(u.published_at || new Date().toISOString(), { weekday: "long", month: "long", day: "numeric", year: "numeric" })
+    const wk = u.week_no ? `Week ${String(u.week_no).padStart(2, "0")}${o.weeks ? " of " + o.weeks : ""}` : ""
+    const fig = (x: any, style = "") => `<figure style="${style}"><div class="ph"><img src="${urls[x.path]}" alt=""></div>${x.caption ? `<figcaption>${fnEsc(x.caption)}</figcaption>` : ""}</figure>`
+    const layouts: Record<number, string> = { 1: "grid-template-columns:1fr", 2: "grid-template-columns:1fr 1fr", 3: "grid-template-columns:1.4fr 1fr;grid-template-rows:1fr 1fr", 4: "grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr", 5: "grid-template-columns:repeat(6,1fr);grid-template-rows:1fr 1fr", 6: "grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr" }
+    const span = (n: number, i: number) => n === 3 && i === 0 ? "grid-row:span 2" : n === 5 ? (i < 2 ? "grid-column:span 3" : "grid-column:span 2") : ""
+    const hl = (u.highlights || []).filter(Boolean)
+    const next = (u.next_items || []).filter((x: any) => x && x.item)
+    const asks = (u.asks_items || []).filter((x: any) => x && x.item)
+    const dec = (u.decisions || []).filter((x: any) => x && x.item)
+    const who = (w: string) => w === "you" ? "You" : w === "both" ? "Together" : "Studio"
+    const ph = o.phase
+    const foot = (n: number) => `<footer class="ft"><span>Felema Yemaneberhan · FELEMAYE LLC</span><span>${[ct.email, ct.phone, ct.web].filter(Boolean).map(fnEsc).join("  ·  ")}</span><span>${n} / 2</span></footer>`
+    const head = (small: boolean) => `<header class="hd${small ? " sm" : ""}"><img class="logo" src="${FN_LOGO}" alt="FELEMAYE"><div class="hr"><div class="k">Friday Progress Note</div><div class="v">${fnEsc(wk)}</div><div class="v">${fnEsc(date)}</div></div></header>`
+    return `<!doctype html><html><head><meta charset="utf-8"><title>Friday Progress Note · ${fnEsc(u.title)}</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&family=Inter:wght@300;400;500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+@page{size:letter;margin:0}*{box-sizing:border-box}
+html,body{margin:0;background:${FN_C.paper};color:${FN_C.ink};-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font:300 10pt/1.55 Inter,system-ui,sans-serif}
+.pg{--s:1;width:8.5in;height:11in;padding:.55in .65in .45in;display:flex;flex-direction:column;overflow:hidden;break-after:page;page-break-after:always;position:relative}
+.pg:last-child{break-after:auto;page-break-after:auto}
+.body{flex:1;min-height:0;display:flex;flex-direction:column;font-size:calc(var(--s)*10pt)}
+.hd{display:flex;justify-content:space-between;align-items:flex-end;padding-bottom:.14in;border-bottom:1px solid ${FN_C.line}}
+.hd .logo{height:.62in;width:auto;display:block}.hd.sm .logo{height:.42in}
+.hr{text-align:right}.hr .k{font:500 7.5pt/1.5 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:${FN_C.accent}}
+.hr .v{font:400 7.5pt/1.6 'IBM Plex Mono',monospace;letter-spacing:.16em;text-transform:uppercase;color:${FN_C.soft}}
+.proj{font:500 7.5pt/1.4 'IBM Plex Mono',monospace;letter-spacing:.2em;text-transform:uppercase;color:${FN_C.accent};margin:.2in 0 .06in}
+h1{font:400 26pt/1.1 'Cormorant Garamond',serif;margin:0 0 .14in;white-space:nowrap;overflow:hidden}
+.strip{display:grid;grid-template-columns:1.3fr 1fr 1.2fr;border-top:1px solid ${FN_C.line};border-bottom:1px solid ${FN_C.line};margin-bottom:.18in}
+.strip>div{padding:.1in .14in .1in 0}.strip>div+div{padding-left:.14in;border-left:1px solid ${FN_C.line}}
+.lab{font:500 6.8pt/1.4 'IBM Plex Mono',monospace;letter-spacing:.22em;text-transform:uppercase;color:${FN_C.soft};margin-bottom:.03in}
+.val{font:400 12pt/1.3 'Cormorant Garamond',serif}
+.bar{height:3px;background:${FN_C.tint};margin-top:.06in}.bar i{display:block;height:100%;background:${FN_C.accent}}
+.lead{font:400 calc(var(--s)*13pt)/1.55 'Cormorant Garamond',serif;margin:0 0 .18in;white-space:pre-wrap}
+.hero{flex:1;min-height:2.4in;display:flex;flex-direction:column}
+figure{margin:0;display:flex;flex-direction:column;min-height:0}
+.ph{flex:1;min-height:0;background:${FN_C.tint};overflow:hidden}.ph img{width:100%;height:100%;object-fit:cover;display:block}
+.hero .ph img{object-fit:contain}
+figcaption{font:400 7.8pt/1.4 Inter;color:${FN_C.soft};margin-top:.05in}
+.grid{display:grid;gap:.12in;height:4.15in;margin:.2in 0 .22in}
+h3{font:500 7pt/1.4 'IBM Plex Mono',monospace;letter-spacing:.24em;text-transform:uppercase;color:${FN_C.accent};margin:0 0 .08in;padding-bottom:.05in;border-bottom:1px solid ${FN_C.line}}
+.cols{display:grid;grid-template-columns:1fr 1.15fr;gap:.32in}
+ul.dash{list-style:none;margin:0 0 .2in;padding:0}ul.dash li{padding:.05in 0 .05in .2in;position:relative;border-bottom:1px solid ${FN_C.line}}ul.dash li:before{content:'—';position:absolute;left:0;color:${FN_C.accent}}
+table{width:100%;border-collapse:collapse;margin:0 0 .2in}td{vertical-align:top;padding:.055in .06in .055in 0;border-bottom:1px solid ${FN_C.line}}
+td.d{width:.95in;white-space:nowrap;font:500 7.4pt/1.5 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:${FN_C.accent}}
+td.w{width:.7in;text-align:right;font:400 7pt/1.5 'IBM Plex Mono',monospace;letter-spacing:.12em;text-transform:uppercase;color:${FN_C.soft}}
+.box{border:1px solid ${FN_C.accent};padding:.1in .14in;margin:0 0 .2in}
+.chk{display:inline-block;width:.11in;height:.11in;border:1px solid ${FN_C.accent};margin-right:.08in;vertical-align:-1px}
+.sig{margin-top:auto;padding-top:.12in}.sig .n{font:italic 400 17pt 'Cormorant Garamond',serif}.sig .s{color:${FN_C.soft};font-size:8.5pt}
+.ft{display:grid;grid-template-columns:auto 1fr auto;gap:.25in;border-top:1px solid ${FN_C.line};padding-top:.09in;margin-top:.14in;font:400 6.5pt/1.4 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase;color:${FN_C.soft}}.ft span{white-space:nowrap}.ft span:nth-child(2){text-align:center;text-transform:none;letter-spacing:.06em}
+@media screen{body{background:#cfc8bb}.pg{margin:.3in auto;box-shadow:0 10px 40px rgba(0,0,0,.18);background:${FN_C.paper}}}
+</style></head><body>
+<section class="pg">${head(false)}<div class="body">
+<div class="proj">${fnEsc(project?.title || "")}${project?.address ? " · " + fnEsc(project.address) : ""}</div>
+<h1 class="fit">${fnEsc(u.title || "")}</h1>
+<div class="strip">
+ <div><div class="lab">Phase</div><div class="val">${ph ? `Phase ${ph.seq}${ph.total ? " of " + ph.total : ""} · ${fnEsc(ph.title)}` : "—"}</div>${ph && ph.pct != null ? `<div class="bar"><i style="width:${Math.max(2, Math.min(100, ph.pct))}%"></i></div>` : ""}</div>
+ <div><div class="lab">Timeline</div><div class="val">${fnEsc(wk || "—")}</div></div>
+ <div><div class="lab">Next review</div><div class="val">${fnEsc(o.nextReview || "To be scheduled")}</div></div>
 </div>
-<div class="ft"><span class="mono">Felema Yemaneberhan · FELEMAYE LLC</span><span class="mono">felemaye.com</span></div></section>` + PRINT_TAIL
+${u.body ? `<p class="lead">${fnEsc(u.body)}</p>` : ""}
+${hero ? `<div class="hero">${fig(hero, "flex:1")}</div>` : ""}
+</div>${foot(1)}</section>
+<section class="pg">${head(true)}<div class="body">
+${rest.length ? `<div class="grid" style="${layouts[rest.length]};${rest.length <= 2 ? "height:3.3in" : ""}">${rest.map((x: any, i: number) => fig(x, span(rest.length, i))).join("")}</div>` : `<div style="height:.2in"></div>`}
+<div class="cols">
+ <div>${hl.length ? `<h3>This week in the studio</h3><ul class="dash">${hl.map((h: string) => `<li>${fnEsc(h)}</li>`).join("")}</ul>` : ""}
+  ${dec.length ? `<h3>Decisions ahead</h3><ul class="dash">${dec.map((d: any) => `<li>${fnEsc(d.item)}${d.by ? ` <span style="color:${FN_C.accent}">· by ${fnDate(d.by)}</span>` : ""}</li>`).join("")}</ul>` : ""}</div>
+ <div>${next.length ? `<h3>Coming up</h3><table>${next.map((x: any) => `<tr><td class="d">${x.date ? fnDate(x.date) : "—"}</td><td>${fnEsc(x.item)}</td><td class="w">${who(x.who)}</td></tr>`).join("")}</table>` : ""}
+  ${asks.length ? `<h3>From you</h3><div class="box">${asks.map((a: any) => `<div style="padding:.03in 0"><span class="chk"></span>${fnEsc(a.item)}${a.due ? ` <span style="color:${FN_C.accent};font:500 7.2pt 'IBM Plex Mono',monospace;letter-spacing:.1em;text-transform:uppercase">· by ${fnDate(a.due)}</span>` : ""}</div>`).join("")}</div>` : ""}</div>
+</div>
+<div class="sig"><div class="n">— Felema</div><div class="s">Questions or thoughts? Reply in your portal, or email ${fnEsc(ct.email)}${ct.phone ? " · " + fnEsc(ct.phone) : ""}.</div></div>
+</div>${foot(2)}</section>
+<script>
+(async()=>{try{await (document.fonts&&document.fonts.ready)}catch(e){}
+await Promise.all([...document.images].map(i=>i.complete?0:new Promise(r=>{i.onload=i.onerror=r})));
+document.querySelectorAll('h1.fit').forEach(h=>{let s=26;while(h.scrollWidth>h.clientWidth&&s>15){s-=.5;h.style.fontSize=s+'pt'}});
+document.querySelectorAll('.pg').forEach(p=>{const b=p.querySelector('.body');let s=1;while(b.scrollHeight>b.clientHeight+1&&s>.8){s-=.03;p.style.setProperty('--s',s)}});
+${o.autoPrint === false ? "" : "setTimeout(()=>print(),300)"}})()
+<\/script></body></html>`
 }
 
+// rows editor used for highlights / coming up / from you / decisions
+function RowsEditor({ rows, setRows, cols, addLabel }: any) {
+    const upd = (i: number, k: string, v: any) => setRows(rows.map((r: any, j: number) => (j === i ? { ...r, [k]: v } : r)))
+    const move = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= rows.length) return; const x = [...rows]; [x[i], x[j]] = [x[j], x[i]]; setRows(x) }
+    return (
+        <div>
+            {rows.map((r: any, i: number) => (
+                <div key={i} className="r" style={{ marginTop: 6, flexWrap: "nowrap", gap: 6 }}>
+                    {cols.map((c: any) => c.type === "date" ? <input key={c.k} type="date" value={r[c.k] || ""} onChange={(e) => upd(i, c.k, e.target.value)} aria-label={c.label} style={{ width: 150, flex: "none" }} />
+                        : c.type === "who" ? <select key={c.k} value={r[c.k] || "studio"} onChange={(e) => upd(i, c.k, e.target.value)} aria-label="Who" style={{ width: 110, flex: "none" }}><option value="studio">Studio</option><option value="you">Client</option><option value="both">Together</option></select>
+                        : <input key={c.k} value={r[c.k] || ""} placeholder={c.label} onChange={(e) => upd(i, c.k, e.target.value)} style={{ flex: 1, minWidth: 0 }} />)}
+                    <button className="b g" onClick={() => move(i, -1)} aria-label="Move up" style={{ padding: "6px 8px" }}>↑</button>
+                    <button className="b g" onClick={() => setRows(rows.filter((_: any, j: number) => j !== i))} aria-label="Remove" style={{ padding: "6px 8px" }}>✕</button>
+                </div>
+            ))}
+            <button className="b g" style={{ marginTop: 6 }} onClick={() => setRows([...rows, {}])}>+ {addLabel}</button>
+        </div>
+    )
+}
+async function noteContext(db: any, pid: string) {
+    const [{ data: project }, { data: ev }, { data: ph }, { data: cad }, { data: ct }] = await Promise.all([
+        db.from("projects").select("title,address").eq("id", pid).maybeSingle(),
+        db.from("calendar_events").select("title,starts_at").eq("project_id", pid).gte("starts_at", new Date().toISOString()).order("starts_at").limit(1),
+        db.from("phases").select("seq,title,status,progress_pct,optional").eq("project_id", pid).order("seq"),
+        db.from("project_cadence").select("weeks").eq("project_id", pid).maybeSingle(),
+        db.from("studio_config").select("value").eq("key", "studio_contact").maybeSingle(),
+    ])
+    const main = (ph || []).filter((x: any) => !x.optional)
+    const cur = main.find((x: any) => x.status === "active") || main.find((x: any) => x.status !== "approved") || main[0]
+    let contact: any = {}; try { contact = JSON.parse(ct?.value || "{}") } catch {}
+    return {
+        project,
+        opts: {
+            weeks: cad?.weeks || null,
+            phase: cur ? { seq: cur.seq, total: main.length, title: String(cur.title).split(/[,&]/)[0].trim(), pct: cur.progress_pct } : null,
+            nextReview: ev?.[0] ? new Date(ev[0].starts_at).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + " PT" : "",
+            contact,
+        },
+    }
+}
 function UpdateEditor({ db, pid, row, onClose }: any) {
-    const [u, setU] = React.useState<any>({ ...row, images: row.images || [], htext: (row.highlights || []).join("\n") })
+    const toRows = (a: any) => (Array.isArray(a) ? a : [])
+    const [u, setU] = React.useState<any>({ ...row, images: row.images || [], hl: (row.highlights || []).map((t: string) => ({ t })), next_items: toRows(row.next_items), asks_items: toRows(row.asks_items), decisions: toRows(row.decisions) })
     const [file, setFile] = React.useState<File | null>(null)
     const [busy, setBusy] = React.useState(false)
     const [thumbs, setThumbs] = React.useState<Record<string, string>>({})
     const [msg, setMsg] = React.useState("")
+    const [contact, setContact] = React.useState<any>({ email: "felema@felemaye.com", phone: "", web: "felemaye.com" })
+    React.useEffect(() => { db.from("studio_config").select("value").eq("key", "studio_contact").maybeSingle().then(({ data }: any) => { try { if (data?.value) setContact((c: any) => ({ ...c, ...JSON.parse(data.value) })) } catch {} }, () => {}) }, [db])
     React.useEffect(() => { const ps = (u.images || []).map((x: any) => x.path).filter((p: string) => !thumbs[p]); if (ps.length) signAll(db, ps).then((m) => setThumbs((t) => ({ ...t, ...m }))) }, [u.images])
     async function addImages(list: FileList | null) {
         if (!list?.length) return
+        const room = 7 - (u.images || []).length
+        if (room <= 0) return setMsg("Seven images is the most the note lays out (one cover + six).")
         setBusy(true)
         const add: any[] = []
-        for (const f of Array.from(list).slice(0, 6)) {
+        for (const f of Array.from(list).slice(0, room)) {
             if (f.size > 20 * 1024 * 1024) { setMsg(f.name + " is over 20 MB"); continue }
             const path = `${pid}/studio/updates/${Date.now()}_${f.name.replace(/[^\w.\-]+/g, "_").slice(-80)}`
             const up = await db.storage.from("project-files").upload(path, f)
@@ -5974,11 +6092,16 @@ function UpdateEditor({ db, pid, row, onClose }: any) {
         setU((x: any) => ({ ...x, images: [...(x.images || []), ...add] })); setBusy(false)
     }
     const setImg = (i: number, patch: any) => setU({ ...u, images: u.images.map((x: any, k: number) => (k === i ? { ...x, ...patch } : x)) })
+    const moveImg = (i: number, d: number) => { const j = i + d; if (j < 0 || j >= u.images.length) return; const x = [...u.images]; [x[i], x[j]] = [x[j], x[i]]; setU({ ...u, images: x }) }
+    const clean = (rows: any[]) => rows.filter((r) => r && String(r.item || "").trim())
     function payload(publish: boolean, file_path: string | null) {
-        const body: any = { project_id: pid, week_no: +u.week_no || null, title: u.title, body: u.body || null, highlights: lines(u.htext), video_url: u.video_url || null, next_up: u.next_up || null, file_path, images: u.images || [] }
+        const body: any = { project_id: pid, week_no: +u.week_no || null, title: u.title, body: u.body || null, highlights: u.hl.map((r: any) => String(r.t || "").trim()).filter(Boolean), video_url: u.video_url || null,
+            next_up: clean(u.next_items).map((r: any) => (r.date ? new Date(r.date + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " · " : "") + r.item).join(" · ") || u.next_up || null,
+            next_items: clean(u.next_items), asks_items: clean(u.asks_items), decisions: clean(u.decisions), file_path, images: u.images || [] }
         if (publish && !u.published_at) body.published_at = new Date().toISOString()
         return body
     }
+    async function saveContact() { await db.from("studio_config").upsert({ key: "studio_contact", value: JSON.stringify(contact) }).then(() => {}, () => {}) }
     async function save(publish: boolean) {
         let file_path = u.file_path || null
         if (file) {
@@ -5987,48 +6110,58 @@ function UpdateEditor({ db, pid, row, onClose }: any) {
             if (up.error) return setMsg(up.error.message)
             file_path = path
         }
-        let r = u.id ? await db.from("async_updates").update(payload(publish, file_path)).eq("id", u.id) : await db.from("async_updates").insert(payload(publish, file_path))
-        if (r.error && /images/.test(r.error.message || "")) { const { images, ...b } = payload(publish, file_path); r = u.id ? await db.from("async_updates").update(b).eq("id", u.id) : await db.from("async_updates").insert(b) }
+        saveContact()
+        const { opts } = await noteContext(db, pid)
+        const body = { ...payload(publish, file_path), print_ctx: { ...opts, contact } }
+        let r = u.id ? await db.from("async_updates").update(body).eq("id", u.id) : await db.from("async_updates").insert(body)
+        if (r.error && /next_items|asks_items|decisions|images|print_ctx/.test(r.error.message || "")) return setMsg("Run 20261023f_felemaye_friday_note.sql in Supabase first — it adds the itemized fields.")
         if (r.error) return setMsg(r.error.message)
         onClose()
     }
     async function preview() {
-        const [{ data: project }, { data: ev }] = await Promise.all([
-            db.from("projects").select("title,address").eq("id", pid).maybeSingle(),
-            db.from("calendar_events").select("title,starts_at").eq("project_id", pid).gte("starts_at", new Date().toISOString()).order("starts_at").limit(1),
-        ])
+        saveContact()
+        const { project, opts } = await noteContext(db, pid)
         const urls = await signAll(db, (u.images || []).map((x: any) => x.path))
-        const next = ev?.[0] ? `${ev[0].title} — ${new Date(ev[0].starts_at).toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })} PT` : ""
-        openPrint(fridayNoteHtml(project, { ...u, highlights: lines(u.htext) }, urls, next), setMsg)
+        const w = window.open("", "_blank"); if (!w) return setMsg("Allow pop-ups to open the print view.")
+        w.document.write(fridayNoteDoc(project, payload(false, u.file_path || null), urls, { ...opts, contact })); w.document.close()
     }
+    const titleLong = String(u.title || "").length > 44
     return (
         <Drawer title="Friday progress note" onClose={onClose}>
-            <p className="v4-note">About ten minutes with what you already have: two to four images from the week (Revit or Enscape views, site photos, a marked-up sheet), a short note, three highlights. The client reads it in the portal; Print / PDF gives the same note as a branded one-pager. No video is promised.</p>
+            <p className="v4-note">Two printed pages. Page 1: title, phase and timeline, your note and a cover image. Page 2: up to six more images, this week's highlights, what's coming up with dates, and anything you need from her. Publishing pings Banchi in her portal and by email.</p>
             <div className="v4-grid" style={{ gridTemplateColumns: "90px 1fr" }}>
                 <label className="v4-field"><span className="mono">Week</span><input type="number" value={u.week_no || ""} onChange={(e) => setU({ ...u, week_no: e.target.value })} /></label>
-                <label className="v4-field"><span className="mono">Title</span><input value={u.title} onChange={(e) => setU({ ...u, title: e.target.value })} placeholder="Site measured, County research under way" /></label>
+                <label className="v4-field"><span className="mono">Title {titleLong ? "· long — it will shrink to fit one line" : ""}</span><input value={u.title || ""} onChange={(e) => setU({ ...u, title: e.target.value })} placeholder="Site measured, County research under way" /></label>
             </div>
-            <label className="v4-field"><span className="mono">Note</span><textarea rows={5} value={u.body || ""} onChange={(e) => setU({ ...u, body: e.target.value })} placeholder="Two or three sentences in your voice: what moved this week and why it matters for the courtyard." /></label>
+            <label className="v4-field"><span className="mono">Note</span><textarea rows={6} value={u.body || ""} onChange={(e) => setU({ ...u, body: e.target.value })} placeholder="Three to five sentences in your voice: what moved this week and why it matters for the courtyard." /></label>
             <div className="c v4-panel">
-                <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">Images · {(u.images || []).length}</span><label className="b g" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "+ Add images"}<input type="file" accept="image/*" multiple hidden onChange={(e) => { addImages(e.target.files); e.currentTarget.value = "" }} /></label></div>
+                <div className="r" style={{ justifyContent: "space-between" }}><span className="mono">Images · {(u.images || []).length} of 7 · the first is the cover</span><label className="b g" style={{ cursor: "pointer" }}>{busy ? "Uploading…" : "+ Add images"}<input type="file" accept="image/*" multiple hidden onChange={(e) => { addImages(e.target.files); e.currentTarget.value = "" }} /></label></div>
                 {(u.images || []).map((x: any, i: number) => (
-                    <div key={x.path} className="r" style={{ marginTop: 8, flexWrap: "nowrap" }}>
-                        <span style={{ width: 64, height: 48, flex: "none", background: "color-mix(in srgb,var(--ink) 10%,transparent)", overflow: "hidden" }}>{thumbs[x.path] && <img src={thumbs[x.path]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}</span>
-                        <input value={x.caption || ""} placeholder="Caption (e.g. Revit massing — Option B, street view)" onChange={(e) => setImg(i, { caption: e.target.value })} style={{ flex: 1 }} />
-                        <button className="b g" onClick={() => setU({ ...u, images: u.images.filter((_: any, k: number) => k !== i) })} aria-label="Remove image">✕</button>
+                    <div key={x.path} className="r" style={{ marginTop: 8, flexWrap: "nowrap", gap: 6 }}>
+                        <span style={{ width: 72, height: 54, flex: "none", background: "color-mix(in srgb,var(--ink) 10%,transparent)", overflow: "hidden", outline: i === 0 ? "2px solid var(--accent)" : "none" }}>{thumbs[x.path] && <img src={thumbs[x.path]} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />}</span>
+                        <input value={x.caption || ""} placeholder={i === 0 ? "Cover caption (e.g. 3D base model — site context)" : "Caption"} onChange={(e) => setImg(i, { caption: e.target.value })} style={{ flex: 1, minWidth: 0 }} />
+                        <button className="b g" onClick={() => moveImg(i, -1)} aria-label="Move up" style={{ padding: "6px 8px" }}>↑</button>
+                        <button className="b g" onClick={() => setU({ ...u, images: u.images.filter((_: any, k: number) => k !== i) })} aria-label="Remove image" style={{ padding: "6px 8px" }}>✕</button>
                     </div>
                 ))}
             </div>
-            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Highlights (one per line)</span><textarea rows={3} value={u.htext} onChange={(e) => setU({ ...u, htext: e.target.value })} /></label>
-            <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Next</span><input value={u.next_up || ""} onChange={(e) => setU({ ...u, next_up: e.target.value })} placeholder="Massing options A and B for our kickoff call" /></label>
-            <details style={{ marginTop: 10 }}><summary className="mono" style={{ cursor: "pointer" }}>Optional: video link · PDF attachment</summary>
+            <div className="c v4-panel"><span className="mono">This week in the studio</span><RowsEditor rows={u.hl} setRows={(hl: any) => setU({ ...u, hl })} cols={[{ k: "t", label: "One highlight" }]} addLabel="Highlight" /></div>
+            <div className="c v4-panel"><span className="mono">Coming up · date, what, who</span><RowsEditor rows={u.next_items} setRows={(next_items: any) => setU({ ...u, next_items })} cols={[{ k: "date", type: "date", label: "Date" }, { k: "item", label: "What happens" }, { k: "who", type: "who" }]} addLabel="Date" /></div>
+            <div className="c v4-panel"><span className="mono">From you · what Banchi needs to do, by when</span><RowsEditor rows={u.asks_items} setRows={(asks_items: any) => setU({ ...u, asks_items })} cols={[{ k: "item", label: "e.g. Kids fill out the design intent survey" }, { k: "due", type: "date", label: "By" }]} addLabel="Request" /></div>
+            <div className="c v4-panel"><span className="mono">Decisions ahead (optional)</span><RowsEditor rows={u.decisions} setRows={(decisions: any) => setU({ ...u, decisions })} cols={[{ k: "item", label: "e.g. Option A or B" }, { k: "by", type: "date", label: "By" }]} addLabel="Decision" /></div>
+            <details style={{ marginTop: 10 }}><summary className="mono" style={{ cursor: "pointer" }}>Footer contact · video link · PDF attachment</summary>
+                <div className="v4-grid" style={{ marginTop: 10 }}>
+                    <label className="v4-field"><span className="mono">Email</span><input value={contact.email || ""} onChange={(e) => setContact({ ...contact, email: e.target.value })} /></label>
+                    <label className="v4-field"><span className="mono">Phone</span><input value={contact.phone || ""} onChange={(e) => setContact({ ...contact, phone: e.target.value })} placeholder="(323) 000-0000" /></label>
+                    <label className="v4-field"><span className="mono">Website</span><input value={contact.web || ""} onChange={(e) => setContact({ ...contact, web: e.target.value })} /></label>
+                </div>
                 <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Video link (only if you recorded one)</span><input value={u.video_url || ""} onChange={(e) => setU({ ...u, video_url: e.target.value })} /></label>
                 <label className="v4-field" style={{ marginTop: 10 }}><span className="mono">Attach a PDF</span><input type="file" accept="application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} /></label>
             </details>
             <div className="r" style={{ marginTop: 14 }}>
                 <button className="b g" onClick={() => save(false)}>Save draft</button>
-                <button className="b g" onClick={preview}>Print / PDF</button>
-                <button className="b" onClick={() => save(true)}>{u.published_at ? "Save" : "Publish to client"}</button>
+                <button className="b g" onClick={preview}>Preview / PDF</button>
+                <button className="b" onClick={() => save(true)}>{u.published_at ? "Save" : "Publish & notify Banchi"}</button>
             </div>
             {msg && <p className="v4-note">{msg}</p>}
         </Drawer>
